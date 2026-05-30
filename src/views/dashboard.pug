@@ -1,0 +1,129 @@
+extends layout
+
+block content
+  .stats-grid
+    .stat-card
+      .stat-icon.blue 💊
+      .stat-info
+        .stat-number#total-drugs 0
+        .stat-label Total Drugs
+    .stat-card
+      .stat-icon.red 📉
+      .stat-info
+        .stat-number#low-stock 0
+        .stat-label Low Stock
+    .stat-card
+      .stat-icon.orange ⏳
+      .stat-info
+        .stat-number#expiring 0
+        .stat-label Expiring Soon
+    .stat-card
+      .stat-icon.green 🛒
+      .stat-info
+        .stat-number#total-sales 0
+        .stat-label Sales Today
+
+  .grid-2
+    .card
+      .card-title
+        span Recent Sales
+        a.btn.btn-sm.btn-ghost(href='/sales') View All
+      .table-wrapper
+        table
+          thead
+            tr
+              th Drug
+              th Quantity Sold
+              th ROP Alert
+              th Time
+          tbody#recent-sales
+            tr
+              td(colspan='4')
+                .loader
+                  .spinner
+                  |  Loading...
+
+    .card
+      .card-title
+        span Active Alerts
+        a.btn.btn-sm.btn-ghost(href='/alerts') View All
+      #recent-alerts
+        .loader
+          .spinner
+          |  Loading...
+
+block scripts
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+      const token = getToken();
+      if (!token) return window.location.href = '/login';
+
+      fetch('/api/inventory', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(data => {
+          const drugs   = data.drugs || [];
+          const today   = new Date();
+
+          const lowStock = drugs.filter(d => d.total_quantity <= d.reorder_point).length;
+          const expiring = drugs.filter(d => {
+            if (!d.batches.length) return false;
+            const days = Math.ceil((new Date(d.batches[0].expiry_date) - today) / 86400000);
+            return days > 0 && days <= d.expiry_alert_days;
+          }).length;
+
+          countUp(document.getElementById('total-drugs'), drugs.length);
+          countUp(document.getElementById('low-stock'),   lowStock);
+          countUp(document.getElementById('expiring'),    expiring);
+        });
+
+      fetch('/api/sales', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(data => {
+          const sales = data.sales || [];
+          const today = new Date().toDateString();
+          const todaySales = sales.filter(s => new Date(s.created_at).toDateString() === today);
+
+          countUp(document.getElementById('total-sales'), todaySales.length);
+
+          const tbody = document.getElementById('recent-sales');
+          if (!sales.length) {
+            tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><div class="empty-state-icon">🛒</div><p>No sales yet today</p></div></td></tr>`;
+            return;
+          }
+          tbody.innerHTML = sales.slice(0, 6).map((s, i) => `
+            <tr style="animation-delay:${i * 0.05}s">
+              <td><strong>${s.snapshot.drug_name}</strong></td>
+              <td>${s.quantity_sold} units</td>
+              <td><span class="badge ${s.snapshot.rop_triggered ? 'badge-low' : 'badge-ok'}">${s.snapshot.rop_triggered ? 'Triggered' : 'Normal'}</span></td>
+              <td style="color:#8492a6">${new Date(s.created_at).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit' })}</td>
+            </tr>
+          `).join('');
+        });
+
+      fetch('/api/alerts', { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.json())
+        .then(data => {
+          const alerts  = data.alerts || [];
+          const wrapper = document.getElementById('recent-alerts');
+
+          if (!alerts.length) {
+            wrapper.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔔</div><p>No active alerts</p></div>`;
+            return;
+          }
+
+          wrapper.innerHTML = alerts.slice(0, 3).map(a => `
+            <div class="alert-card ${a.type}">
+              <div class="alert-card-header">
+                <span class="alert-card-title">${a.type} — ${a.drug_name}</span>
+                <span class="badge badge-${a.status}">${a.status}</span>
+              </div>
+              <div class="alert-card-body">
+                ${a.type === 'ROP'
+                  ? `Needs <strong>${a.quantity_needed}</strong> units`
+                  : `<strong>${a.quantity_available}</strong> units expiring ${new Date(a.expiry_date).toLocaleDateString()}`
+                }
+              </div>
+            </div>
+          `).join('');
+        });
+    });

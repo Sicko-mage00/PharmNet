@@ -1,0 +1,261 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Admin Setup
+
+  .grid-2
+    .card
+      .card-title Create Facility
+      form#facility-form
+        .form-group
+          label Facility Name
+          input.form-control(type='text' id='f-name' placeholder='e.g Lagos General Hospital' required)
+        .form-group
+          label Type
+          select.form-control#f-type
+            option(value='hospital') Hospital
+            option(value='pharmacy') Pharmacy
+            option(value='clinic') Clinic
+            option(value='warehouse') Warehouse
+        .form-group
+          label Phone
+          input.form-control(type='tel' id='f-phone' placeholder='e.g 08012345678' required)
+        .form-group
+          label Street (optional)
+          input.form-control(type='text' id='f-street' placeholder='e.g 12 Marina Road')
+        .form-row
+          .form-group
+            label City
+            input.form-control(type='text' id='f-city' placeholder='e.g Lagos' required)
+          .form-group
+            label State
+            input.form-control(type='text' id='f-state' placeholder='e.g Lagos' required)
+        button.btn.btn-primary(type='submit' style='width:100%') Create Facility
+      #facility-result
+
+    .card
+      .card-title Generate Invite Key
+      form#key-form
+        .form-group
+          label Facility
+          select.form-control#k-facility(required)
+            option(value='') -- Select Facility --
+        .form-group
+          label Role to Grant
+          select.form-control#k-role(required)
+            option(value='pharmacist') Pharmacist
+            option(value='facility_admin') Facility Admin
+        .form-row
+          .form-group
+            label Max Uses
+            input.form-control(type='number' id='k-uses' value='5' min='1')
+          .form-group
+            label Expires In (days)
+            input.form-control(type='number' id='k-days' value='7' min='1')
+        button.btn.btn-success(type='submit' style='width:100%') Generate Key
+      #key-result
+
+  .card
+    .card-title
+      span All Facilities
+      button.btn.btn-sm.btn-ghost#refresh-facilities(onclick='loadFacilities()') Refresh
+    .table-wrapper
+      table
+        thead
+          tr
+            th Name
+            th Type
+            th City
+            th Phone
+            th Action
+        tbody#facilities-table
+          tr
+            td(colspan='5')
+              .loader
+                .spinner
+                |  Loading...
+
+  .card
+    .card-title All Generated Keys
+    .table-wrapper
+      table
+        thead
+          tr
+            th Facility
+            th Code
+            th Role
+            th Uses
+            th Expires
+            th Status
+        tbody#keys-table
+          tr
+            td(colspan='6')
+              .loader
+                .spinner
+                |  Loading...
+
+block scripts
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+      const token = getToken();
+
+      // ── Load facilities ────────────────────────────
+      window.loadFacilities = () => {
+        fetch('/api/facilities', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(r => r.json())
+        .then(data => {
+          const facilities = data.facilities || [];
+
+          // populate table
+          const tbody = document.getElementById('facilities-table');
+          if (!facilities.length) {
+            tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><p>No facilities yet</p></div></td></tr>`;
+          } else {
+            tbody.innerHTML = facilities.map(f => `
+              <tr>
+                <td><strong>${f.name}</strong></td>
+                <td>${f.type}</td>
+                <td>${f.address ? f.address.city : '—'}</td>
+                <td>${f.phone}</td>
+                <td>
+                  <button class="btn btn-sm btn-primary"
+                    onclick="prefillKeyForm('${f._id}', '${f.name}')">
+                    Generate Key
+                  </button>
+                </td>
+              </tr>
+            `).join('');
+          }
+
+          // populate key form dropdown
+          const select = document.getElementById('k-facility');
+          select.innerHTML = '<option value="">-- Select Facility --</option>';
+          facilities.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f._id;
+            opt.textContent = f.name;
+            select.appendChild(opt);
+          });
+        });
+      };
+
+      // ── Load keys ──────────────────────────────────
+      const loadKeys = () => {
+        fetch('/api/facility-keys', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(r => r.json())
+        .then(data => {
+          const keys  = data.keys || [];
+          const tbody = document.getElementById('keys-table');
+
+          if (!keys.length) {
+            tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>No keys generated yet</p></div></td></tr>`;
+            return;
+          }
+
+          tbody.innerHTML = keys.map(k => `
+            <tr>
+              <td>${k.facility_id ? k.facility_id.name : '—'}</td>
+              <td><code style="background:#f0f2f5;padding:0.2rem 0.5rem;border-radius:4px;font-family:'DM Mono',monospace;font-weight:600">${k.code}</code></td>
+              <td>${k.role}</td>
+              <td>${k.usedCount} / ${k.maxUses}</td>
+              <td>${new Date(k.expiresAt).toLocaleDateString()}</td>
+              <td><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
+            </tr>
+          `).join('');
+        });
+      };
+
+      // ── Prefill key form from table ─────────────────
+      window.prefillKeyForm = (id, name) => {
+        const select = document.getElementById('k-facility');
+        select.value = id;
+        select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      };
+
+      // ── Create facility ────────────────────────────
+      document.getElementById('facility-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const result = document.getElementById('facility-result');
+        result.innerHTML = '<div class="loader"><div class="spinner"></div> Creating...</div>';
+
+        try {
+          const res = await fetch('/api/facilities', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              name:  document.getElementById('f-name').value,
+              type:  document.getElementById('f-type').value,
+              phone: document.getElementById('f-phone').value,
+              address: {
+                street: document.getElementById('f-street').value,
+                city:   document.getElementById('f-city').value,
+                state:  document.getElementById('f-state').value,
+              },
+            }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            result.innerHTML = `
+              <div class="flash flash-success" style="margin-top:1rem">
+                ✓ <strong>${data.facility.name}</strong> created successfully
+              </div>`;
+            document.getElementById('facility-form').reset();
+            loadFacilities();
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:1rem">${data.message}</div>`;
+          }
+        } catch (err) {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:1rem">Something went wrong</div>`;
+        }
+      });
+
+      // ── Generate key ───────────────────────────────
+      document.getElementById('key-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const result = document.getElementById('key-result');
+        result.innerHTML = '<div class="loader"><div class="spinner"></div> Generating...</div>';
+
+        try {
+          const res = await fetch('/api/facility-keys/generate', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              facility_id:  document.getElementById('k-facility').value,
+              role:         document.getElementById('k-role').value,
+              maxUses:      parseInt(document.getElementById('k-uses').value),
+              expiresInDays: parseInt(document.getElementById('k-days').value),
+            }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            result.innerHTML = `
+              <div class="flash flash-success" style="margin-top:1rem">
+                ✓ Key generated for <strong>${data.key.facility}</strong><br>
+                <span style="font-size:1.3rem;font-weight:700;font-family:'DM Mono',monospace;color:#0052CC;letter-spacing:2px">${data.key.code}</span><br>
+                <small>Role: ${data.key.role} · Max uses: ${data.key.maxUses} · Expires: ${new Date(data.key.expiresAt).toLocaleDateString()}</small>
+              </div>`;
+            loadKeys();
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:1rem">${data.message}</div>`;
+          }
+        } catch (err) {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:1rem">Something went wrong</div>`;
+        }
+      });
+
+      loadFacilities();
+      loadKeys();
+    });

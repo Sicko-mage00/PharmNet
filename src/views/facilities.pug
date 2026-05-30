@@ -1,0 +1,75 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Facilities Network
+    a.btn.btn-primary(href='/facilities/new') + Add Facility
+
+  .card
+    .table-wrapper
+      table
+        thead
+          tr
+            th Name
+            th Type
+            th City
+            th Phone
+            th Network
+            th Actions
+        tbody#facilities-table
+          tr
+            td(colspan='6' style='text-align:center;color:#6c757d') Loading...
+
+block scripts
+  script.
+    const token = getToken();
+
+    fetch('/api/facilities', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+      const facilities = data.facilities || [];
+      const tbody      = document.getElementById('facilities-table');
+
+      if (!facilities.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6c757d">No facilities yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = facilities.map(f => `
+        <tr>
+          <td><strong>${f.name}</strong></td>
+          <td>${f.type}</td>
+          <td>${f.address ? f.address.city : '—'}</td>
+          <td>${f.phone}</td>
+          <td><span class="badge ${f.isNetworkMember ? 'badge-resolved' : 'badge-declined'}">${f.isNetworkMember ? 'Active' : 'Inactive'}</span></td>
+          <td>
+            <button class="btn btn-sm btn-primary" onclick="generateKey('${f._id}', '${f.name}')">Generate Key</button>
+          </td>
+        </tr>
+      `).join('');
+    });
+
+    const generateKey = (facilityId, facilityName) => {
+      const role = prompt(`Generate key for ${facilityName}\nRole? (pharmacist / facility_admin)`);
+      if (!role) return;
+      const maxUses = prompt('Max uses? (default: 1)') || 1;
+
+      fetch('/api/facility-keys/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ facility_id: facilityId, role, maxUses: parseInt(maxUses), expiresInDays: 7 }),
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.key) {
+          alert(`Key generated!\n\nCode: ${data.key.code}\nRole: ${data.key.role}\nExpires: ${new Date(data.key.expiresAt).toLocaleDateString()}\n\nShare this code with the staff member.`);
+        } else {
+          alert(data.message || 'Failed to generate key');
+        }
+      });
+    };

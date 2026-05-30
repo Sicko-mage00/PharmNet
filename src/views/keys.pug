@@ -1,0 +1,62 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Facility Keys
+
+  .card
+    .table-wrapper
+      table
+        thead
+          tr
+            th Name
+            th Code
+            th Role
+            th Uses
+            th Expires
+            th Status
+            th Actions
+        tbody#keys-table
+          tr
+            td(colspan='7' style='text-align:center;color:#6c757d') Loading...
+
+block scripts
+  script.
+    const token = getToken();
+
+    fetch('/api/facility-keys', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+      const keys  = data.keys || [];
+      const tbody = document.getElementById('keys-table');
+
+      if (!keys.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6c757d">No keys generated yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = keys.map(k => `
+        <tr>
+          <td>${k.name || '—'}</td>
+          <td><strong>${k.code}</strong></td>
+          <td>${k.role}</td>
+          <td>${k.usedCount} / ${k.maxUses}</td>
+          <td>${new Date(k.expiresAt).toLocaleDateString()}</td>
+          <td><span class="badge ${k.isActive ? 'badge-resolved' : 'badge-declined'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
+          <td>
+            ${k.isActive ? `<button class="btn btn-sm btn-danger" onclick="deactivateKey('${k._id}')">Deactivate</button>` : '—'}
+          </td>
+        </tr>
+      `).join('');
+    });
+
+    const deactivateKey = async (id) => {
+      if (!confirm('Deactivate this key?')) return;
+      const res = await fetch(`/api/facility-keys/${id}/deactivate`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) window.location.reload();
+    };

@@ -1,0 +1,100 @@
+extends layout
+
+block content
+  .auth-wrapper
+    .auth-card
+      h1 PharmaNet
+      p Select your facility and enter your invite key
+
+      form#verify-form
+        .form-group
+          label Select Your Facility
+          select.form-control#facility_id(required)
+            option(value='' disabled selected) -- Select Hospital --
+        .form-group
+          label Invite Key
+          input.form-control(
+            type='text'
+            id='code'
+            placeholder='e.g A3F2B1C9'
+            required
+          )
+        button.btn.btn-primary(type='submit' style='width:100%') Verify
+
+      p(style='text-align:center; margin-top:1rem; font-size:0.9rem')
+        a(href='#' id='logout-link') Logout
+
+block scripts
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const showError = (msg) => {
+        let el = document.getElementById('verify-error');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'verify-error';
+          el.className = 'alert alert-error';
+          document.getElementById('verify-form').prepend(el);
+        }
+        el.textContent = msg;
+      };
+
+      fetch('/api/facilities')
+        .then(r => r.json())
+        .then(data => {
+          const select = document.getElementById('facility_id');
+          data.facilities.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f._id;
+            opt.textContent = `${f.name} — ${f.address ? f.address.city : 'Nigeria'}`;
+            select.appendChild(opt);
+          });
+        });
+
+      const logoutLink = document.getElementById('logout-link');
+      if (logoutLink) {
+        logoutLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        });
+      }
+
+      document.getElementById('verify-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const code        = document.getElementById('code').value;
+        const facility_id = document.getElementById('facility_id').value;
+
+        if (!facility_id) {
+          showError('Please select a facility first');
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/auth/verify-facility', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({ code, facility_id }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            const user = getUser();
+            user.role       = data.role;
+            user.facilityId = facility_id;
+            localStorage.setItem('user', JSON.stringify(user));
+            window.location.href = '/dashboard';
+          } else {
+            showError(data.message || 'Verification failed');
+          }
+        } catch (err) {
+          showError('Something went wrong — try again');
+        }
+      });
+
+    });

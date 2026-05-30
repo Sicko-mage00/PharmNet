@@ -1,0 +1,73 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Add Facility
+    a.btn(href='/facilities' style='background:#6c757d;color:white') Back
+
+  .card
+    form#facility-form
+      .form-group
+        label Facility Name
+        input.form-control(type='text' id='name' placeholder='e.g Lagos General Hospital' required)
+      .form-group
+        label Type
+        select.form-control#type
+          option hospital
+          option pharmacy
+          option clinic
+          option warehouse
+      .form-group
+        label Phone
+        input.form-control(type='tel' id='phone' placeholder='e.g 08012345678' required)
+      h3(style='margin:1rem 0; font-size:1rem') Address
+      .form-row
+        .form-group
+          label Street
+          input.form-control(type='text' id='street' placeholder='Street address')
+        .form-group
+          label City
+          input.form-control(type='text' id='city' placeholder='e.g Lagos' required)
+      .form-group
+        label State
+        input.form-control(type='text' id='state' placeholder='e.g Lagos' required)
+      button.btn.btn-primary(type='submit') Create Facility
+
+block scripts
+  script.
+    const token = getToken();
+
+    document.getElementById('facility-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const body = {
+        name:  document.getElementById('name').value,
+        type:  document.getElementById('type').value,
+        phone: document.getElementById('phone').value,
+        address: {
+          street: document.getElementById('street').value,
+          city:   document.getElementById('city').value,
+          state:  document.getElementById('state').value,
+        },
+      };
+
+      try {
+        const res = await fetch('/api/facilities', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          window.location.href = '/facilities';
+        } else {
+          alert(data.message || 'Failed to create facility');
+        }
+      } catch (err) {
+        alert('Something went wrong');
+      }
+    });

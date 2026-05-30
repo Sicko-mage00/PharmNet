@@ -1,0 +1,221 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Scan Drug
+
+  .card(style='max-width:520px; margin:0 auto')
+    .scan-mode-tabs
+      button.scan-tab.active#tab-sell(onclick='switchMode("sell")') 💊 Sell (POS)
+      button.scan-tab#tab-restock(onclick='switchMode("restock")') 📦 Restock
+
+    .scanner-box#scanner-box
+      div#reader(style='width:100%')
+      .scanner-overlay
+        .scan-line
+        .scan-corners
+
+    .form-group
+      label Or enter barcode manually
+      .input-wrapper
+        input.form-control#barcode-input(
+          type='text'
+          placeholder='Scan or type barcode...'
+        )
+
+    #scan-result
+
+block scripts
+  script(src='https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js')
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+      let mode = 'sell';
+      let scanner;
+
+      const switchMode = (m) => {
+        mode = m;
+        document.getElementById('tab-sell').classList.toggle('active', m === 'sell');
+        document.getElementById('tab-restock').classList.toggle('active', m === 'restock');
+        document.getElementById('scan-result').innerHTML = '';
+      };
+
+      window.switchMode = switchMode;
+
+      // start scanner
+      scanner = new Html5Qrcode('reader');
+      scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => handleScan(decodedText),
+        () => {}
+      ).catch(() => {
+        document.getElementById('reader').innerHTML =
+          '<p style="color:#8492a6;text-align:center;padding:2rem;font-size:0.85rem">Camera not available — use manual entry</p>';
+      });
+
+      // manual entry
+      document.getElementById('barcode-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleScan(e.target.value.trim());
+      });
+
+      const handleScan = async (barcode) => {
+        if (!barcode) return;
+        document.getElementById('scan-result').innerHTML = '<div class="loader"><div class="spinner"></div> Looking up drug...</div>';
+
+        try {
+          const token = getToken();
+
+          // find drug by barcode
+          const res  = await fetch('/api/inventory', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          const drug = (data.drugs || []).find(d => d.barcode === barcode);
+
+          if (!drug) {
+            document.getElementById('scan-result').innerHTML = `
+              <div class="flash flash-error">Drug not found for barcode: <strong>${barcode}</strong></div>
+              <a href="/inventory/add" class="btn btn-primary">+ Add New Drug</a>
+            `;
+            return;
+          }
+
+          if (mode === 'sell') {
+            renderSellForm(drug);
+          } else {
+            renderRestockForm(drug);
+          }
+        } catch (err) {
+          document.getElementById('scan-result').innerHTML =
+            '<div class="flash flash-error">Something went wrong</div>';
+        }
+      };
+
+      const renderSellForm = (drug) => {
+        document.getElementById('scan-result').innerHTML = `
+          <div class="flash flash-success" style="margin-bottom:1rem">
+            Found: <strong>${drug.drug_name}</strong> — ${drug.total_quantity} ${drug.unit} in stock
+          </div>
+          <div class="form-group">
+            <label>Quantity to Sell</label>
+            <input class="form-control" type="number" id="sell-qty" min="1" max="${drug.total_quantity}" placeholder="Enter quantity" />
+          </div>
+          <div class="form-group">
+            <label>Patient Ref (optional)</label>
+            <input class="form-control" type="text" id="sell-ref" placeholder="e.g PAT-001" />
+          </div>
+          <button class="btn btn-primary" style="width:100%" onclick="recordSale('${drug._id}', '${drug.drug_name}', ${drug.total_quantity})">
+            Record Sale
+          </button>
+        `;
+      };
+
+      const renderRestockForm = (drug) => {
+        document.getElementById('scan-result').innerHTML = `
+          <div class="flash flash-success" style="margin-bottom:1rem">
+            Found: <strong>${drug.drug_name}</strong> — current stock: ${drug.total_quantity} ${drug.unit}
+          </div>
+          <div class="form-group">
+            <label>Batch Number</label>
+            <input class="form-control" type="text" id="r-batch" placeholder="e.g BATCH003" />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Quantity</label>
+              <input class="form-control" type="number" id="r-qty" min="1" placeholder="e.g 200" />
+            </div>
+            <div class="form-group">
+              <label>Expiry Date</label>
+              <input class="form-control" type="date" id="r-expiry" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Unit Price (₦) optional</label>
+            <input class="form-control" type="number" id="r-price" placeholder="e.g 150" />
+          </div>
+          <button class="btn btn-success" style="width:100%" onclick="addBatch('${drug._id}', '${drug.drug_name}')">
+            Add Batch
+          </button>
+        `;
+      };
+
+      window.recordSale = async (drugId, drugName, maxQty) => {
+        const qty = parseInt(document.getElementById('sell-qty').value);
+        const ref = document.getElementById('sell-ref').value;
+
+        if (!qty || qty < 1 || qty > maxQty) {
+          alert(`Enter a valid quantity (1–${maxQty})`);
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/sales', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({ drug_id: drugId, quantity_sold: qty, patient_ref: ref || null }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            document.getElementById('scan-result').innerHTML = `
+              <div class="flash flash-success">
+                ✓ Sale recorded — <strong>${qty} ${drugName}</strong> dispensed<br>
+                Stock after: ${data.sale.snapshot.quantity_after}<br>
+                ${data.alerts_triggered > 0 ? `<a href="/alerts" style="color:#1a9e5c;font-weight:600">⚠ ${data.alerts_triggered} alert(s) triggered — View Alerts</a>` : ''}
+              </div>
+              <button class="btn btn-ghost" style="width:100%;margin-top:0.5rem" onclick="location.reload()">Scan Another</button>
+            `;
+            document.getElementById('barcode-input').value = '';
+          } else {
+            document.getElementById('scan-result').innerHTML =
+              `<div class="flash flash-error">${data.message || 'Sale failed'}</div>`;
+          }
+        } catch (err) {
+          document.getElementById('scan-result').innerHTML =
+            '<div class="flash flash-error">Something went wrong</div>';
+        }
+      };
+
+      window.addBatch = async (drugId, drugName) => {
+        const batch  = document.getElementById('r-batch').value;
+        const qty    = parseInt(document.getElementById('r-qty').value);
+        const expiry = document.getElementById('r-expiry').value;
+        const price  = parseFloat(document.getElementById('r-price').value) || null;
+
+        if (!batch || !qty || !expiry) {
+          alert('Batch number, quantity and expiry date are required');
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/inventory/${drugId}/batch`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({ batch_number: batch, quantity: qty, expiry_date: expiry, unit_price: price }),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            document.getElementById('scan-result').innerHTML = `
+              <div class="flash flash-success">
+                ✓ Batch added — <strong>${qty} ${drugName}</strong> restocked<br>
+                New total: ${data.drug.total_quantity}
+              </div>
+              <button class="btn btn-ghost" style="width:100%;margin-top:0.5rem" onclick="location.reload()">Scan Another</button>
+            `;
+          } else {
+            document.getElementById('scan-result').innerHTML =
+              `<div class="flash flash-error">${data.message || 'Restock failed'}</div>`;
+          }
+        } catch (err) {
+          document.getElementById('scan-result').innerHTML =
+            '<div class="flash flash-error">Something went wrong</div>';
+        }
+      };
+    });

@@ -1,0 +1,91 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Record Sale
+    a.btn(href='/sales' style='background:#6c757d;color:white') Back
+
+  .card
+    form#sale-form
+      .form-group
+        label Drug
+        select.form-control#drug_id(required)
+          option(value='') -- Select Drug --
+      .form-group
+        label Quantity
+        input.form-control(type='number' id='quantity_sold' min='1' placeholder='Enter quantity' required)
+      .form-group
+        label Unit Price (₦) (optional)
+        input.form-control(type='number' id='unit_price' placeholder='e.g 150')
+      .form-group
+        label Patient Ref (optional)
+        input.form-control(type='text' id='patient_ref' placeholder='e.g PAT-001')
+      button.btn.btn-primary(type='submit' style='width:100%') Record Sale
+
+  #sale-result(style='display:none')
+    .card#result-card
+
+block scripts
+  script.
+    const token = getToken();
+
+    // load drugs into dropdown
+    fetch('/api/inventory', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+      const select = document.getElementById('drug_id');
+      (data.drugs || []).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d._id;
+        opt.textContent = `${d.drug_name} — ${d.total_quantity} ${d.unit} available`;
+        select.appendChild(opt);
+      });
+    });
+
+    document.getElementById('sale-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const body = {
+        drug_id:      document.getElementById('drug_id').value,
+        quantity_sold: parseInt(document.getElementById('quantity_sold').value),
+        unit_price:   parseFloat(document.getElementById('unit_price').value) || null,
+        patient_ref:  document.getElementById('patient_ref').value || null,
+      };
+
+      try {
+        const res = await fetch('/api/sales', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          const result = document.getElementById('sale-result');
+          const card   = document.getElementById('result-card');
+          result.style.display = 'block';
+
+          card.innerHTML = `
+            <div class="card-title">Sale Recorded ✓</div>
+            <p><strong>Drug:</strong> ${data.sale.snapshot.drug_name}</p>
+            <p><strong>Qty Sold:</strong> ${data.sale.quantity_sold}</p>
+            <p><strong>Stock After:</strong> ${data.sale.snapshot.quantity_after}</p>
+            <p><strong>ROP Triggered:</strong> ${data.sale.snapshot.rop_triggered ? '⚠️ Yes' : 'No'}</p>
+            <p><strong>FEFO Triggered:</strong> ${data.sale.snapshot.fefo_triggered ? '⚠️ Yes' : 'No'}</p>
+            <p><strong>Alerts Created:</strong> ${data.alerts_triggered}</p>
+            ${data.alerts_triggered > 0 ? '<a href="/alerts" class="btn btn-warning" style="margin-top:1rem">View Alerts</a>' : ''}
+          `;
+
+          document.getElementById('sale-form').reset();
+        } else {
+          alert(data.message || 'Failed to record sale');
+        }
+      } catch (err) {
+        alert('Something went wrong');
+      }
+    });

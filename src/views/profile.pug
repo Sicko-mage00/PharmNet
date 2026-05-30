@@ -1,0 +1,50 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Profile
+
+  .profile-card.card
+    .profile-avatar-wrap
+      .profile-avatar#profile-initial ?
+      .profile-name#profile-name Loading...
+      .profile-role#profile-role —
+
+    .profile-fields#profile-fields
+      .loader
+        .spinner
+        |  Loading...
+
+block scripts
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+      const token = getToken();
+
+      fetch('/api/auth/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(r => r.json())
+      .then(data => {
+        const u = data.user;
+
+        document.getElementById('profile-initial').textContent = (u.firstName || 'U')[0].toUpperCase();
+        document.getElementById('profile-name').textContent    = `${u.firstName} ${u.lastName}`;
+        document.getElementById('profile-role').textContent    = (u.role || '—').replace('_', ' ');
+
+        const fields = [
+          { label: 'Email',        value: u.email       || '—' },
+          { label: 'Phone',        value: u.phone       || '—' },
+          { label: 'Role',         value: (u.role || '—').replace('_', ' ') },
+          { label: 'Facility',     value: u.facility_id ? u.facility_id.name : '—' },
+          { label: 'Verified',     value: u.isKeyVerified ? '✓ Verified' : '✗ Not verified' },
+          { label: 'Member Since', value: new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }) },
+        ];
+
+        document.getElementById('profile-fields').innerHTML = fields.map(f => `
+          <div class="profile-field">
+            <span class="profile-field-label">${f.label}</span>
+            <span class="profile-field-value">${f.value}</span>
+          </div>
+        `).join('');
+      });
+    });

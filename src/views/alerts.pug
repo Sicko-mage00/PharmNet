@@ -1,0 +1,102 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Alerts
+
+  #alerts-container
+    p(style='color:#6c757d') Loading...
+
+block scripts
+  script.
+    const token = getToken();
+    const user  = getUser();
+
+    const loadAlerts = () => {
+      fetch('/api/alerts', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(r => r.json())
+      .then(data => {
+        const alerts    = data.alerts || [];
+        const container = document.getElementById('alerts-container');
+
+        if (!alerts.length) {
+          container.innerHTML = '<p style="color:#6c757d">No active alerts</p>';
+          return;
+        }
+
+        container.innerHTML = alerts.map(a => {
+          const isSource = a.source_facility && a.source_facility._id === (user && user.facilityId);
+          const isTarget = a.target_facility && a.target_facility._id === (user && user.facilityId);
+
+          let actions = '';
+
+          if (a.status === 'pending' && isSource) {
+            actions += `<button class="btn btn-success btn-sm" onclick="confirmAlert('${a._id}')">Confirm</button>`;
+            actions += `<button class="btn btn-danger btn-sm" onclick="declineAlert('${a._id}')">Decline</button>`;
+          }
+          if (a.status === 'confirmed' && isSource) {
+            actions += `<button class="btn btn-primary btn-sm" onclick="dispatchAlert('${a._id}')">Mark Dispatched</button>`;
+          }
+          if (a.status === 'dispatched' && isTarget) {
+            actions += `<button class="btn btn-success btn-sm" onclick="resolveAlert('${a._id}')">Mark Received</button>`;
+          }
+          if (['pending', 'confirmed'].includes(a.status) && isTarget) {
+            actions += `<button class="btn btn-warning btn-sm" onclick="selfResolve('${a._id}')">Self Resolve</button>`;
+          }
+
+          return `
+            <div class="alert-card ${a.type}">
+              <div class="alert-card-header">
+                <span class="alert-card-title">${a.type} Alert — ${a.drug_name}</span>
+                <span class="badge badge-${a.status}">${a.status}</span>
+              </div>
+              <div class="alert-card-body">
+                <p><strong>From:</strong> ${a.source_facility ? a.source_facility.name : '—'}</p>
+                <p><strong>To:</strong> ${a.target_facility ? a.target_facility.name : '—'}</p>
+                ${a.quantity_needed ? `<p><strong>Needed:</strong> ${a.quantity_needed} units</p>` : ''}
+                ${a.quantity_available ? `<p><strong>Available:</strong> ${a.quantity_available} units</p>` : ''}
+                ${a.expiry_date ? `<p><strong>Expiry:</strong> ${new Date(a.expiry_date).toLocaleDateString()}</p>` : ''}
+                ${a.notes ? `<p><strong>Notes:</strong> ${a.notes}</p>` : ''}
+                <p style="font-size:0.8rem;color:#6c757d">${new Date(a.created_at).toLocaleString()}</p>
+              </div>
+              ${actions ? `<div class="alert-card-footer">${actions}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+      });
+    };
+
+    loadAlerts();
+
+    const alertAction = async (url, body = {}) => {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loadAlerts();
+      } else {
+        alert(data.message || 'Action failed');
+      }
+    };
+
+    const confirmAlert  = id => alertAction(`/api/alerts/${id}/confirm`);
+    const declineAlert  = id => alertAction(`/api/alerts/${id}/decline`);
+    const dispatchAlert = id => alertAction(`/api/alerts/${id}/dispatch`, { notes: 'Drugs dispatched' });
+    const selfResolve   = id => alertAction(`/api/alerts/${id}/self-resolve`, { notes: 'Resolved externally' });
+
+    const resolveAlert  = async (id) => {
+      const batch_number = prompt('Enter the batch number you added to inventory:');
+      if (!batch_number) return;
+      alertAction(`/api/alerts/${id}/resolve`, {
+        batch_number,
+        notes: 'Drugs received',
+      });
+    };

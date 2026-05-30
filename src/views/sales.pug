@@ -1,0 +1,52 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Sales History
+    a.btn.btn-primary(href='/sales/new') + Record Sale
+
+  .card
+    .table-wrapper
+      table
+        thead
+          tr
+            th Drug
+            th Qty Sold
+            th Batch
+            th Price
+            th ROP Alert
+            th FEFO Alert
+            th Date
+        tbody#sales-table
+          tr
+            td(colspan='7' style='text-align:center;color:#6c757d') Loading...
+
+block scripts
+  script.
+    const token = getToken();
+
+    fetch('/api/sales', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+      const sales = data.sales || [];
+      const tbody = document.getElementById('sales-table');
+
+      if (!sales.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6c757d">No sales yet</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = sales.map(s => `
+        <tr>
+          <td><strong>${s.snapshot.drug_name}</strong></td>
+          <td>${s.quantity_sold}</td>
+          <td>${s.batch_number || '—'}</td>
+          <td>₦${s.unit_price || '—'}</td>
+          <td><span class="badge ${s.snapshot.rop_triggered ? 'badge-declined' : 'badge-resolved'}">${s.snapshot.rop_triggered ? 'Yes' : 'No'}</span></td>
+          <td><span class="badge ${s.snapshot.fefo_triggered ? 'badge-warning' : 'badge-resolved'}">${s.snapshot.fefo_triggered ? 'Yes' : 'No'}</span></td>
+          <td>${new Date(s.created_at).toLocaleString()}</td>
+        </tr>
+      `).join('');
+    });

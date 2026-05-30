@@ -1,0 +1,106 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Add Drug
+    a.btn(href='/inventory' style='background:#6c757d;color:white') Back
+
+  .card
+    form#add-drug-form
+      .form-row
+        .form-group
+          label Drug Name
+          input.form-control(type='text' id='drug_name' placeholder='e.g Amoxicillin' required)
+        .form-group
+          label Generic Name
+          input.form-control(type='text' id='generic_name' placeholder='e.g Amoxicillin Trihydrate')
+      .form-row
+        .form-group
+          label Category
+          select.form-control#category
+            option(value='') -- Select --
+            option antibiotic
+            option analgesic
+            option antiviral
+            option antifungal
+            option vitamin
+            option other
+        .form-group
+          label Unit
+          select.form-control#unit
+            option tablet
+            option capsule
+            option vial
+            option ml
+            option sachet
+      .form-row
+        .form-group
+          label Barcode
+          input.form-control(type='text' id='barcode' placeholder='Scan or enter barcode')
+        .form-group
+          label Reorder Point
+          input.form-control(type='number' id='reorder_point' placeholder='e.g 50' required)
+      .form-row
+        .form-group
+          label Expiry Alert Days
+          input.form-control(type='number' id='expiry_alert_days' placeholder='e.g 90' value='90')
+
+      h3(style='margin:1.5rem 0 1rem; font-size:1rem; color:#343a40') First Batch
+      .form-row
+        .form-group
+          label Batch Number
+          input.form-control(type='text' id='batch_number' placeholder='e.g BATCH001' required)
+        .form-group
+          label Quantity
+          input.form-control(type='number' id='quantity' placeholder='e.g 200' required)
+      .form-row
+        .form-group
+          label Expiry Date
+          input.form-control(type='date' id='expiry_date' required)
+        .form-group
+          label Unit Price (₦)
+          input.form-control(type='number' id='unit_price' placeholder='e.g 150')
+
+      button.btn.btn-primary(type='submit') Add Drug
+
+block scripts
+  script.
+    const token = getToken();
+
+    document.getElementById('add-drug-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const body = {
+        drug_name:         document.getElementById('drug_name').value,
+        generic_name:      document.getElementById('generic_name').value,
+        category:          document.getElementById('category').value,
+        unit:              document.getElementById('unit').value,
+        barcode:           document.getElementById('barcode').value,
+        reorder_point:     parseInt(document.getElementById('reorder_point').value),
+        expiry_alert_days: parseInt(document.getElementById('expiry_alert_days').value),
+        batch_number:      document.getElementById('batch_number').value,
+        quantity:          parseInt(document.getElementById('quantity').value),
+        expiry_date:       document.getElementById('expiry_date').value,
+        unit_price:        parseFloat(document.getElementById('unit_price').value),
+      };
+
+      try {
+        const res = await fetch('/api/inventory', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          window.location.href = '/inventory';
+        } else {
+          alert(data.message || 'Failed to add drug');
+        }
+      } catch (err) {
+        alert('Something went wrong');
+      }
+    });
