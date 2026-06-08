@@ -7,7 +7,7 @@ block content
 
   .card
     .table-wrapper
-      table
+      table.mobile-stack
         thead
           tr
             th Drug Name
@@ -23,11 +23,8 @@ block content
 
 block scripts
   script.
-    const token = getToken();
 
-    fetch('/api/inventory', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    fetch('/api/inventory', { credentials: 'include' })
     .then(r => r.json())
     .then(data => {
       const drugs = data.drugs || [];
@@ -39,20 +36,20 @@ block scripts
       }
 
       tbody.innerHTML = drugs.map(d => {
-        const nearest = d.batches.length ? new Date(d.batches[0].expiry_date).toLocaleDateString() : 'N/A';
-        const isLow   = d.total_quantity <= d.reorder_point;
+        const nearest = d.batches.length
+          ? new Date(d.batches[0].expiry_date).toLocaleDateString('en-NG')
+          : 'N/A';
+        const isLow = d.total_quantity <= d.reorder_point;
         return `
           <tr>
-            <td><strong>${d.drug_name}</strong><br><small style="color:#6c757d">${d.generic_name || ''}</small></td>
-            <td>${d.category || '—'}</td>
-            <td style="color:${isLow ? '#dc3545' : '#28a745'};font-weight:600">${d.total_quantity} ${d.unit}</td>
-            <td>${d.reorder_point}</td>
-            <td>${nearest}</td>
-            <td><span class="badge ${isLow ? 'badge-declined' : 'badge-resolved'}">${isLow ? 'Low Stock' : 'OK'}</span></td>
-            <td>
-              <a href="/inventory/${d._id}" class="btn btn-sm btn-primary">View</a>
-            </td>
+            <td data-label="Drug"><strong>${d.drug_name}</strong><br><small style="color:#8492a6">${d.generic_name || ''}</small></td>
+            <td data-label="Category">${d.category || '—'}</td>
+            <td data-label="Stock" style="color:${isLow ? 'var(--danger)' : 'var(--success)'};font-weight:600">${d.total_quantity} ${d.unit}</td>
+            <td data-label="Reorder Point">${d.reorder_point}</td>
+            <td data-label="Nearest Expiry">${nearest}</td>
+            <td data-label="Status"><span class="badge ${isLow ? 'badge-low' : 'badge-ok'}">${isLow ? 'Low Stock' : 'OK'}</span></td>
+            <td data-label="Action"><a href="/inventory/${d._id}" class="btn btn-sm btn-primary">View</a></td>
           </tr>
         `;
       }).join('');
-    });
+    });   

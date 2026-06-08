@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Alert from '../models/alert.js';
 import Drug from '../models/drug.js';
 import { emitAlert, getIO } from '../services/socket.js';
@@ -7,7 +8,7 @@ const alertController = {
   // ─── GET ALL ALERTS ────────────────────────────────────
   getAlerts: async (req, res) => {
     try {
-      const facility_id = req.user.facility_id;
+      const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
 
       const alerts = await Alert.find({
         $or: [

@@ -4,6 +4,15 @@ import Alert from '../models/alert.js';
 // ─── ROP MATCHER ─────────────────────────────────────────
 export const matchROP = async (ropData, saleId) => {
 
+  // Debug logging for ROP matching
+  console.log('[matcher#matchROP] ropData=', {
+    drug_id: ropData?.drug_id?.toString?.() || ropData?.drug_id,
+    drug_name: ropData?.drug_name,
+    facility_id: ropData?.facility_id?.toString?.() || ropData?.facility_id,
+    quantity_needed: ropData?.quantity_needed,
+    saleId: saleId?.toString?.() || saleId,
+  });
+
   const potentialSources = await Drug.find({
     drug_name:   ropData.drug_name,
     facility_id: { $ne: ropData.facility_id },
@@ -25,6 +34,7 @@ export const matchROP = async (ropData, saleId) => {
   );
 
   // no match — create self alert
+  console.log('[matcher#matchROP] validSources.length=', validSources.length);
   if (!validSources.length) {
     const selfAlert = await Alert.create({
       type:              'ROP',
@@ -69,6 +79,7 @@ export const matchROP = async (ropData, saleId) => {
     results.push({ alert, matched: true });
   }
 
+  console.log('[matcher#matchROP] created alerts count=', results.length);
   return results;
 };
 

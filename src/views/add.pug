@@ -65,7 +65,6 @@ block content
 
 block scripts
   script.
-    const token = getToken();
 
     document.getElementById('add-drug-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -88,9 +87,9 @@ block scripts
         const res = await fetch('/api/inventory', {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',  
           },
+          credentials: 'include',
           body: JSON.stringify(body),
         });
         const data = await res.json();

@@ -3,67 +3,50 @@ import User from '../models/user.js';
 
 export const protect = async (req, res, next) => {
   try {
-    let token;
 
-    // 1. read token from Authorization header
-    if (req.headers.authorization?.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-    }
-
-    if (!token) {
+    // 1. check session exists
+    if (!req.session.userId) {
       return res.status(401).json({ message: 'Not logged in' });
     }
 
-    // 2. verify token — throws if expired or tampered
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // 3. fetch full user document from MongoDB using id inside token
-    const user = await User.findById(decoded.id);
+    // 2. fetch full user from DB using session
+    const user = await User.findById(req.session.userId);
     if (!user || !user.isActive) {
       return res.status(401).json({ message: 'User no longer exists' });
     }
 
-    // 4. attach user to request
+    // 3. attach user to request
     req.user = user;
 
-    // 5. second gate — block unverified users from all protected routes
+    // 4. second gate — block unverified users
     if (!req.user.isKeyVerified && req.user.role !== 'super_admin') {
-      const allowedUnverifiedPaths = new Set([
-        // exact API endpoints
-        '/api/facilities',
-        // exact view endpoints (server-side Pug routes)
-        '/profile',
-        '/verify',
-        // exact verify action (API)
-        '/api/auth/verify-facility',
-      ]);
-
       const pathOnly = req.originalUrl.split('?')[0];
-      const isAllowed = allowedUnverifiedPaths.has(pathOnly);
+
+      const allowedPaths = [
+        '/api/facilities',
+        '/api/auth/verify-facility',
+        '/api/auth/profile',
+        '/verify',
+        '/profile',
+      ];
+
+      const isAllowed = allowedPaths.some(p => pathOnly.startsWith(p));
+
       if (!isAllowed) {
         return res.status(403).json({
           message: 'Please verify your facility key to gain access',
         });
       }
     }
-    
-    // 6. all good — move to controller
+
+    // 5. all good
     next();
 
   } catch (err) {
-    if (err.name === 'JsonWebTokenError') {
-      return res.status(401).json({ message: 'Invalid token' });
-    }
-    if (err.name === 'TokenExpiredError') {
-      return res.status(401).json({ message: 'Session expired, please log in again' });
-    }
     res.status(500).json({ message: err.message });
   }
 };
 
-// ─── RESTRICT TO ──────────────────────────────────────────
-// Usage: restrictTo('super_admin', 'facility_admin')
-// Always comes AFTER protect — needs req.user to exist first
 export const restrictTo = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
@@ -73,4 +56,17 @@ export const restrictTo = (...roles) => {
     }
     next();
   };
+};
+
+export const sameFacility = (req, res, next) => {
+  if (req.user.role === 'super_admin') return next();
+
+  const requestedFacility = req.params.facility_id || req.body.facility_id;
+
+  if (requestedFacility && requestedFacility !== req.user.facility_id?.toString()) {
+    return res.status(403).json({
+      message: 'Access denied — you can only access your own facility data',
+    });
+  }
+  next();
 };

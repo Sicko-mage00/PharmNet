@@ -27,12 +27,9 @@ block content
 
 block scripts
   script.
-    const token = getToken();
 
     // load drugs into dropdown
-    fetch('/api/inventory', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    fetch('/api/inventory', { credentials: 'include' })
     .then(r => r.json())
     .then(data => {
       const select = document.getElementById('drug_id');
@@ -59,8 +56,8 @@ block scripts
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
           },
+          credentials: 'include',
           body: JSON.stringify(body),
         });
         const data = await res.json();

@@ -22,11 +22,8 @@ block content
 
 block scripts
   script.
-    const token = getToken();
 
-    fetch('/api/facility-keys', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    fetch('/api/facility-keys', { credentials: 'include' })
     .then(r => r.json())
     .then(data => {
       const keys  = data.keys || [];
@@ -56,7 +53,7 @@ block scripts
       if (!confirm('Deactivate this key?')) return;
       const res = await fetch(`/api/facility-keys/${id}/deactivate`, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
       });
       if (res.ok) window.location.reload();
     };

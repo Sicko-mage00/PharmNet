@@ -3,25 +3,31 @@ extends layout
 block content
   .page-header
     h2.page-title#drug-title Drug Details
-    a.btn(href='/inventory' style='background:#6c757d;color:white') Back
+    a.btn.btn-ghost(href='/inventory') ← Back
 
   .card#drug-info
-    p(style='color:#6c757d') Loading...
+    .loader
+      .spinner
+      |  Loading...
 
   .card
     .card-title Batches
     .table-wrapper
-      table
+      table.mobile-stack
         thead
           tr
             th Batch No.
             th Quantity
             th Expiry Date
+            th Days Left
             th Unit Price
             th Received
         tbody#batches-table
           tr
-            td(colspan='5' style='text-align:center;color:#6c757d') Loading...
+            td(colspan='6')
+              .loader
+                .spinner
+                |  Loading...
 
   .card
     .card-title Add New Batch
@@ -29,80 +35,147 @@ block content
       .form-row
         .form-group
           label Batch Number
-          input.form-control(type='text' id='batch_number' required)
+          input.form-control(type='text' id='batch_number' placeholder='e.g BATCH003' required)
         .form-group
           label Quantity
-          input.form-control(type='number' id='quantity' required)
+          input.form-control(type='number' id='quantity' min='1' placeholder='e.g 100' required)
       .form-row
         .form-group
           label Expiry Date
           input.form-control(type='date' id='expiry_date' required)
         .form-group
           label Unit Price (₦)
-          input.form-control(type='number' id='unit_price')
+          input.form-control(type='number' id='unit_price' min='0' placeholder='e.g 150')
       button.btn.btn-primary(type='submit') Add Batch
 
 block scripts
   script.
-    const token  = getToken();
-    const drugId = window.location.pathname.split('/').pop();
+    document.addEventListener('DOMContentLoaded', () => {
+      const drugId = window.location.pathname.split('/').pop();
 
-    fetch(`/api/inventory/${drugId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(r => r.json())
-    .then(data => {
-      const d = data.drug;
-      document.getElementById('drug-title').textContent = d.drug_name;
+      fetch(`/api/inventory/${drugId}`, {
+        credentials: 'include',
+      })
+      .then(r => r.json())
+      .then(data => {
+        const d = data.drug;
+        document.getElementById('drug-title').textContent = d.drug_name;
 
-      document.getElementById('drug-info').innerHTML = `
-        <div class="drug-meta">
-          <div><strong>Generic Name</strong><p>${d.generic_name || '—'}</p></div>
-          <div><strong>Category</strong><p>${d.category || '—'}</p></div>
-          <div><strong>Unit</strong><p>${d.unit}</p></div>
-          <div><strong>Total Stock</strong><p style="color:${d.total_quantity <= d.reorder_point ? '#dc3545' : '#28a745'};font-weight:700">${d.total_quantity}</p></div>
-          <div><strong>Reorder Point</strong><p>${d.reorder_point}</p></div>
-          <div><strong>Barcode</strong><p>${d.barcode || '—'}</p></div>
-        </div>
-      `;
+        const isLow = d.total_quantity <= d.reorder_point;
 
-      const tbody = document.getElementById('batches-table');
-      tbody.innerHTML = d.batches.map((b, i) => `
-        <tr>
-          <td>${b.batch_number} ${i === 0 ? '<span class="badge badge-warning">FEFO Next</span>' : ''}</td>
-          <td>${b.quantity}</td>
-          <td>${new Date(b.expiry_date).toLocaleDateString()}</td>
-          <td>₦${b.unit_price || '—'}</td>
-          <td>${new Date(b.received_date).toLocaleDateString()}</td>
-        </tr>
-      `).join('');
-    });
+        document.getElementById('drug-info').innerHTML = `
+          <div class="drug-meta">
+            <div class="drug-meta-item">
+              <strong>Generic Name</strong>
+              <p>${d.generic_name || '—'}</p>
+            </div>
+            <div class="drug-meta-item">
+              <strong>Category</strong>
+              <p>${d.category || '—'}</p>
+            </div>
+            <div class="drug-meta-item">
+              <strong>Unit</strong>
+              <p>${d.unit}</p>
+            </div>
+            <div class="drug-meta-item">
+              <strong>Total Stock</strong>
+              <p style="color:${isLow ? 'var(--danger)' : 'var(--success)'};font-weight:700">
+                ${d.total_quantity}
+                ${isLow ? '<span class="badge badge-low" style="margin-left:0.4rem">Low</span>' : ''}
+              </p>
+            </div>
+            <div class="drug-meta-item">
+              <strong>Reorder Point</strong>
+              <p>${d.reorder_point}</p>
+            </div>
+            <div class="drug-meta-item">
+              <strong>Barcode</strong>
+              <p style="font-family:'DM Mono',monospace;font-size:0.85rem">${d.barcode || '—'}</p>
+            </div>
+          </div>
+        `;
 
-    document.getElementById('add-batch-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const body = {
-        batch_number: document.getElementById('batch_number').value,
-        quantity:     parseInt(document.getElementById('quantity').value),
-        expiry_date:  document.getElementById('expiry_date').value,
-        unit_price:   parseFloat(document.getElementById('unit_price').value),
-      };
+        const tbody = document.getElementById('batches-table');
 
-      try {
-        const res = await fetch(`/api/inventory/${drugId}/batch`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          window.location.reload();
-        } else {
-          alert(data.message || 'Failed to add batch');
+        if (!d.batches.length) {
+          tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No batches</p></div></td></tr>';
+          return;
         }
-      } catch (err) {
-        alert('Something went wrong');
-      }
+
+        tbody.innerHTML = d.batches.map((b, i) => {
+          const today  = new Date();
+          const expiry = new Date(b.expiry_date);
+          const days   = Math.ceil((expiry - today) / 86400000);
+
+          let rowClass = 'batch-row fefo-ok';
+          let tag      = `<span class="batch-tag ok">Good</span>`;
+
+          if (days <= 30 && days > 0) {
+            rowClass = 'batch-row fefo-warning';
+            tag      = `<span class="batch-tag warning">⚠ Urgent</span>`;
+          } else if (i === 0 && days <= d.expiry_alert_days) {
+            rowClass = 'batch-row fefo-next';
+            tag      = `<span class="batch-tag next">Next</span>`;
+          }
+
+          const daysText = days > 0
+            ? `${days} days`
+            : `<span style="color:var(--danger);font-weight:600">Expired</span>`;
+
+          return `
+            <tr class="${rowClass}">
+              <td data-label="Batch No.">${b.batch_number}${i === 0 ? tag : ''}</td>
+              <td data-label="Quantity">${b.quantity} ${d.unit}</td>
+              <td data-label="Expiry">${new Date(b.expiry_date).toLocaleDateString('en-NG')}</td>
+              <td data-label="Days Left">${daysText}</td>
+              <td data-label="Unit Price">₦${b.unit_price || '—'}</td>
+              <td data-label="Received">${new Date(b.received_date).toLocaleDateString('en-NG')}</td>
+            </tr>
+          `;
+        }).join('');
+      });
+
+      document.getElementById('add-batch-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.textContent = 'Adding...';
+        btn.disabled = true;
+
+        const body = {
+          batch_number: document.getElementById('batch_number').value,
+          quantity:     parseInt(document.getElementById('quantity').value) || 0,
+          expiry_date:  document.getElementById('expiry_date').value,
+          unit_price:   parseFloat(document.getElementById('unit_price').value) || null,
+        };
+
+        try {
+          const res = await fetch(`/api/inventory/${drugId}/batch`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            window.location.reload();
+          } else {
+            btn.textContent = 'Add Batch';
+            btn.disabled = false;
+            // show inline error
+            let err = document.getElementById('batch-error');
+            if (!err) {
+              err = document.createElement('div');
+              err.id = 'batch-error';
+              err.className = 'flash flash-error';
+              e.target.prepend(err);
+            }
+            err.textContent = data.message || 'Failed to add batch';
+          }
+        } catch (err) {
+          btn.textContent = 'Add Batch';
+          btn.disabled = false;
+        }
+      });
     });

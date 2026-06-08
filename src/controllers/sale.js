@@ -1,8 +1,17 @@
+import mongoose from 'mongoose';
 import Sale from '../models/sale.js';
 import Drug from '../models/drug.js';
 import logicEngine from '../services/logicEngine.js';
 import { matchROP, matchFEFO } from '../services/matcher.js';
 import { emitAlert } from '../services/socket.js';
+
+const parseFacilityId = (req, res, next) => {
+  if (req.user && req.user.facility_id) {
+    // Attach the casted ObjectId directly to the request object
+    req.facilityObjectId = new mongoose.Types.ObjectId(req.user.facility_id.toString());
+  }
+  next();
+};
 
 const saleController = {
 
@@ -17,7 +26,7 @@ const saleController = {
       // ── Step 1: fetch drug ─────────────────────────────
       const drug = await Drug.findOne({
         _id: drug_id,
-        facility_id: req.user.facility_id,
+        facility_id: req.facilityObjectId,
         isActive: true,
       });
 
@@ -61,10 +70,9 @@ const saleController = {
 
       // ── Step 4: logic engine ───────────────────────────
       const engineResult = logicEngine(drug);
-
       // ── Step 5: create sale ────────────────────────────
       const sale = await Sale.create({
-        facility_id:  req.user.facility_id,
+        facility_id:  req.facilityObjectId,
         drug_id:      drug._id,
         sold_by:      req.user._id,
         quantity_sold,
@@ -116,7 +124,7 @@ const saleController = {
 
   getAllSales: async (req, res) => {
     try {
-      const sales = await Sale.find({ facility_id: req.user.facility_id })
+      const sales = await Sale.find({ facility_id: req.facilityObjectId })
         .populate('drug_id', 'drug_name unit')
         .populate('sold_by', 'firstName lastName')
         .sort({ created_at: -1 });
@@ -131,7 +139,7 @@ const saleController = {
     try {
       const sale = await Sale.findOne({
         _id: req.params.id,
-        facility_id: req.user.facility_id,
+        facility_id: req.facilityObjectId,
       })
         .populate('drug_id', 'drug_name unit')
         .populate('sold_by', 'firstName lastName');

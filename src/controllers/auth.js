@@ -1,16 +1,6 @@
-import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
 import Facility from '../models/facility.js';
 import FacilityKey from '../models/facilityKey.js';
-
-// sign token
-const signToken = (user) => {
-  return jwt.sign(
-    { id: user._id, role: user.role, facility_id: user.facility_id },
-    process.env.JWT_SECRET,
-    { expiresIn: '8h' }
-  );
-};
 
 const authController = {
 
@@ -25,15 +15,13 @@ const authController = {
         phone,
         password,  // pre('save') hook hashes this
       });
-
-      const token = signToken(user);
+      
       const fullName = `${user.lastName} ${user.firstName}`;
 
       res.status(201).json({
           status: 'success',
           message: 'Registration successful',
           name: fullName,
-          token,
       });
     } catch (err) {
       if (err.code === 11000) {
@@ -51,11 +39,8 @@ const authController = {
         return res.status(400).json({ message: 'Email and password are required' });
       }
 
-      // select('+password') explicitly pulls password back
-      // since we will add select: false to schema
       const user = await User.findOne({ email }).select('+password');
-      // deliberate: same message whether email or password is wrong
-      // prevents attackers from knowing which one failed
+
       if (!user || !(await user.comparePassword(password))) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
@@ -64,27 +49,35 @@ const authController = {
         return res.status(403).json({ message: 'Account deactivated. Contact your admin.' });
       }
 
+      // store in server-side session — cookie sent automatically
+      req.session.userId      = user._id.toString();
+      req.session.role        = user.role;
+      req.session.facility_id = user.facility_id ? user.facility_id.toString() : null;
+
       user.lastLogin = new Date();
       await user.save({ validateBeforeSave: false });
 
-      const token = signToken(user);
       const fullName = `${user.lastName} ${user.firstName}`;
 
       res.status(200).json({
-        status: 'success',
-        message: 'Login successful',
-        name: fullName,
-        role: user.role,
+        status:   'success',
+        message:  'Login successful',
+        name:     fullName,
+        role:     user.role,
         facility: user.facility_id ? user.facility_id.name : null,
-        token,
+        email:    user.email,
       });
+
     } catch (err) {
       res.status(500).json({ message: 'Server login error', error: err.message });
     }
   },
 
   logout: (req, res) => {
-    res.status(200).json({ status: 'success', message: 'Logged out' });
+    req.session.destroy((err) => {
+      if (err) console.error(err);
+      res.status(200).json({ status: 'success', message: 'Logged out' });
+    });
   },
 
   getProfile: async (req, res) => {
@@ -107,6 +100,9 @@ const authController = {
   
       // find the key matching both code and facility
       const key = await FacilityKey.findOne({ code, facility_id });
+
+      // after updating user, fetch the facility name
+      const facility = await Facility.findById(key.facility_id).select('name');
   
       if (!key) {
         return res.status(404).json({ message: 'Invalid key' });
@@ -134,6 +130,7 @@ const authController = {
       res.status(200).json({
         message: 'Facility verified successfully',
         role: key.role,
+        facility: facility ? facility.name : null,
       });
   
     } catch (err) {

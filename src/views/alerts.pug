@@ -9,12 +9,11 @@ block content
 
 block scripts
   script.
-    const token = getToken();
     const user  = getUser();
 
     const loadAlerts = () => {
       fetch('/api/alerts', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
       })
       .then(r => r.json())
       .then(data => {
@@ -75,8 +74,8 @@ block scripts
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify(body),
       });
       const data = await res.json();

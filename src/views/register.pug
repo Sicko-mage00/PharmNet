@@ -68,7 +68,7 @@ block content
                     path(d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z')
                     circle(cx='12' cy='12' r='3')
 
-        button.btn.btn-primary(type='submit' style='width:100%') Create Account
+        button.btn.btn-primary(type='submit') Create Account
 
       p(style='text-align:center; margin-top:1rem; font-size:0.9rem')
         | Already have an account?
@@ -97,13 +97,13 @@ block scripts
         const res = await fetch('/api/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ firstName, lastName, email, phone, password }),
         });
 
         const data = await res.json();
 
         if (res.ok) {
-          localStorage.setItem('token', data.token);
           localStorage.setItem('user', JSON.stringify({
             name: data.name,
             role: data.role,

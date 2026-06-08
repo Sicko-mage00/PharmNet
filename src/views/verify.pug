@@ -1,6 +1,7 @@
 extends layout
 
 block content
+
   .auth-wrapper
     .auth-card
       h1 PharmaNet
@@ -39,7 +40,7 @@ block scripts
         el.textContent = msg;
       };
 
-      fetch('/api/facilities')
+      fetch('/api/facilities', { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
           const select = document.getElementById('facility_id');
@@ -55,7 +56,6 @@ block scripts
       if (logoutLink) {
         logoutLink.addEventListener('click', (e) => {
           e.preventDefault();
-          localStorage.removeItem('token');
           localStorage.removeItem('user');
           window.location.href = '/login';
         });
@@ -77,8 +77,9 @@ block scripts
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${getToken()}`,
             },
+            credentials: 'include',
+
             body: JSON.stringify({ code, facility_id }),
           });
           const data = await res.json();
@@ -86,8 +87,11 @@ block scripts
           if (res.ok) {
             const user = getUser();
             user.role       = data.role;
-            user.facilityId = facility_id;
-            localStorage.setItem('user', JSON.stringify(user));
+            user.facility = data.facility;
+
+            user.facilityId = document.getElementById('facility_id').value;
+            sessionStorage.setItem('user', JSON.stringify(user));
+
             window.location.href = '/dashboard';
           } else {
             showError(data.message || 'Verification failed');
@@ -96,5 +100,4 @@ block scripts
           showError('Something went wrong — try again');
         }
       });
-
     });

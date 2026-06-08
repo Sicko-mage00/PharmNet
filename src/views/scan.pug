@@ -63,11 +63,10 @@ block scripts
         document.getElementById('scan-result').innerHTML = '<div class="loader"><div class="spinner"></div> Looking up drug...</div>';
 
         try {
-          const token = getToken();
 
           // find drug by barcode
           const res  = await fetch('/api/inventory', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            credentials: 'include'
           });
           const data = await res.json();
           const drug = (data.drugs || []).find(d => d.barcode === barcode);
@@ -153,8 +152,8 @@ block scripts
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${getToken()}`,
             },
+            credentials: 'include',
             body: JSON.stringify({ drug_id: drugId, quantity_sold: qty, patient_ref: ref || null }),
           });
           const data = await res.json();
@@ -195,8 +194,8 @@ block scripts
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${getToken()}`,
             },
+            credentials: 'include',
             body: JSON.stringify({ batch_number: batch, quantity: qty, expiry_date: expiry, unit_price: price }),
           });
           const data = await res.json();

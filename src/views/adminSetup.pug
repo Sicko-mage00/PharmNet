@@ -98,12 +98,11 @@ block content
 block scripts
   script.
     document.addEventListener('DOMContentLoaded', () => {
-      const token = getToken();
 
       // ── Load facilities ────────────────────────────
       window.loadFacilities = () => {
         fetch('/api/facilities', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          credentials: 'include',
         })
         .then(r => r.json())
         .then(data => {
@@ -145,7 +144,7 @@ block scripts
       // ── Load keys ──────────────────────────────────
       const loadKeys = () => {
         fetch('/api/facility-keys', {
-          headers: { 'Authorization': `Bearer ${token}` }
+          credentials: 'include',
         })
         .then(r => r.json())
         .then(data => {
@@ -188,8 +187,8 @@ block scripts
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
             },
+            credentials: 'include',
             body: JSON.stringify({
               name:  document.getElementById('f-name').value,
               type:  document.getElementById('f-type').value,
@@ -229,8 +228,8 @@ block scripts
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`,
             },
+            credentials: 'include',
             body: JSON.stringify({
               facility_id:  document.getElementById('k-facility').value,
               role:         document.getElementById('k-role').value,

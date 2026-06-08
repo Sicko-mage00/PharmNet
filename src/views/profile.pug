@@ -6,11 +6,19 @@ block content
 
   .profile-card.card
     .profile-avatar-wrap
-      .profile-avatar#profile-initial ?
-      .profile-name#profile-name Loading...
-      .profile-role#profile-role —
+      .profile-avatar#profile-avatar-circle
+        img#profile-img(src='' alt='' style='display:none')
+        span#profile-initial ?
+      label.avatar-upload-btn(for='avatar-file-input' title='Change photo')
+        svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2')
+          path(d='M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z')
+          circle(cx='12' cy='13' r='4')
+      input#avatar-file-input(type='file' accept='image/*')
 
-    .profile-fields#profile-fields
+    .profile-name#profile-name Loading...
+    .profile-role#profile-role —
+
+    .profile-fields#profile-fields(style='margin-top:1.5rem')
       .loader
         .spinner
         |  Loading...
@@ -18,33 +26,62 @@ block content
 block scripts
   script.
     document.addEventListener('DOMContentLoaded', () => {
-      const token = getToken();
 
-      fetch('/api/auth/profile', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      fetch('/api/auth/profile', { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         const u = data.user;
+        const initial = (u.firstName || 'U')[0].toUpperCase();
 
-        document.getElementById('profile-initial').textContent = (u.firstName || 'U')[0].toUpperCase();
+        document.getElementById('profile-initial').textContent = initial;
         document.getElementById('profile-name').textContent    = `${u.firstName} ${u.lastName}`;
-        document.getElementById('profile-role').textContent    = (u.role || '—').replace('_', ' ');
+        document.getElementById('profile-role').textContent    = (u.role || '—').replace(/_/g, ' ');
 
-        const fields = [
-          { label: 'Email',        value: u.email       || '—' },
-          { label: 'Phone',        value: u.phone       || '—' },
-          { label: 'Role',         value: (u.role || '—').replace('_', ' ') },
+        // restore saved photo
+        const savedPhoto = sessionStorage.getItem('profile_photo');
+
+        if (savedPhoto) {
+          document.getElementById('profile-img').src     = savedPhoto;
+          document.getElementById('profile-img').style.display = 'block';
+          document.getElementById('profile-initial').style.display = 'none';
+        }
+
+        document.getElementById('profile-fields').innerHTML = [
+          { label: 'Email',        value: u.email || '—' },
+          { label: 'Phone',        value: u.phone || '—' },
+          { label: 'Role',         value: (u.role || '—').replace(/_/g, ' ') },
           { label: 'Facility',     value: u.facility_id ? u.facility_id.name : '—' },
           { label: 'Verified',     value: u.isKeyVerified ? '✓ Verified' : '✗ Not verified' },
-          { label: 'Member Since', value: new Date(u.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }) },
-        ];
-
-        document.getElementById('profile-fields').innerHTML = fields.map(f => `
+          { label: 'Member Since', value: new Date(u.created_at).toLocaleDateString('en-NG', { year:'numeric', month:'long', day:'numeric' }) },
+        ].map(f => `
           <div class="profile-field">
             <span class="profile-field-label">${f.label}</span>
             <span class="profile-field-value">${f.value}</span>
           </div>
         `).join('');
       });
+
+      // save photo with user-specific key
+      const photoKey = `profile_photo_${(getUser()?.email || 'default')}`;
+      document.getElementById('avatar-file-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const src = ev.target.result;
+          document.getElementById('profile-img').src           = src;
+          document.getElementById('profile-img').style.display = 'block';
+          document.getElementById('profile-initial').style.display = 'none';
+          localStorage.setItem(photoKey, src);  // ← user-specific key
+        };
+        reader.readAsDataURL(file);
+      });
+      
+      // restore saved photo
+      const savedPhoto = localStorage.getItem(photoKey);
+      if (savedPhoto) {
+        document.getElementById('profile-img').src           = savedPhoto;
+        document.getElementById('profile-img').style.display = 'block';
+        document.getElementById('profile-initial').style.display = 'none';
+      }
     });

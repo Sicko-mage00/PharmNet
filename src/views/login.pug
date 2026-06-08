@@ -29,7 +29,7 @@ block content
                     path(d='M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z')
                     circle(cx='12' cy='12' r='3')
 
-        button.btn.btn-primary(type='submit' style='width:100%') Login
+        button.btn.btn-primary(type='submit') Login
 
       p(style='text-align:center; margin-top:1rem; font-size:0.9rem')
         | Don't have an account? 
@@ -49,31 +49,23 @@ block scripts
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ email, password }),
             });
 
             const data = await res.json();
 
             if (res.ok) {
-                localStorage.setItem('token', data.token);
+              localStorage.setItem('user', JSON.stringify({
 
-                localStorage.setItem('user', JSON.stringify({
-                    name:     data.name,
-                    role:     data.role,
-                    facility: data.facility,
-                }));
-
-                // backend decides verification; redirect should not rely on localStorage-only state
-                // data.role is set to the user's role (null => not yet verified)
-
-
-                if (data.role === null) {
-                    window.location.href = '/verify';
-                } else {
-                    window.location.href = '/dashboard';
-                }
+                  name:     data.name,
+                  role:     data.role,
+                  facility: data.facility,
+              }));
+              window.location.href = data.role === null ? 
+                '/verify' : '/dashboard';
             } else {
-                alert(data.message || 'Login failed');
+              alert(data.message || 'Login failed');
             }
         } catch (err) {
             alert('Something went wrong');
