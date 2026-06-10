@@ -1,24 +1,27 @@
 import express from 'express';
-const viewRoute = express.Router();
+const router = express.Router();
 
-viewRoute.get('/',         (req, res) => res.redirect('/login'));
-viewRoute.get('/login',    (req, res) => res.render('login',    { title: 'Login' }));
-viewRoute.get('/register', (req, res) => res.render('register', { title: 'Register' }));
-viewRoute.get('/verify',   (req, res) => res.render('verify',   { title: 'Verify Facility' }));
+// ─── Public ───────────────────────────────────────────
+router.get('/',          (req, res) => res.redirect('/login'));
+router.get('/login',     (req, res) => res.render('login',    { title: 'Login' }));
+router.get('/register',  (req, res) => res.render('register', { title: 'Register' }));
+router.get('/verify',    (req, res) => res.render('verify',   { title: 'Verify Facility' }));
 
-// pass user: true so layout shows the sidebar
-viewRoute.get('/dashboard',      (req, res) => res.render('dashboard',      { title: 'Dashboard',      user: true }));
-viewRoute.get('/inventory',      (req, res) => res.render('inventory',      { title: 'Inventory',      user: true }));
-viewRoute.get('/inventory/add',  (req, res) => res.render('inventoryAdd',   { title: 'Add Drug',       user: true }));
-viewRoute.get('/inventory/:id',  (req, res) => res.render('inventoryDetail',{ title: 'Drug Detail',    user: true }));
-viewRoute.get('/sales',          (req, res) => res.render('sales',          { title: 'Sales History',  user: true }));
-viewRoute.get('/sales/new',      (req, res) => res.render('salesNew',       { title: 'Record Sale',    user: true }));
-viewRoute.get('/alerts',         (req, res) => res.render('alerts',         { title: 'Alerts',         user: true }));
-viewRoute.get('/profile',        (req, res) => res.render('profile',        { title: 'Profile',        user: true }));
-viewRoute.get('/facilities',     (req, res) => res.render('facilities',     { title: 'Facilities',     user: true }));
-viewRoute.get('/facilities/new', (req, res) => res.render('facilitiesNew',  { title: 'Add Facility',   user: true }));
-viewRoute.get('/keys',           (req, res) => res.render('keys',           { title: 'Keys',           user: true }));
-viewRoute.get('/scan',           (req, res) => res.render('scan',           { title: 'Scan Drug',      user: true }));
-viewRoute.get('/admin',          (req, res) => res.render('adminSetup',     { title: 'Admin Setup',    user: true }));
+// ─── Super admin pages ────────────────────────────────
+router.get('/admin',              (req, res) => res.render('adminOverview',   { title: 'Overview',   user: { role: 'super_admin' } }));
+router.get('/admin/facilities',   (req, res) => res.render('adminFacilities', { title: 'Facilities', user: { role: 'super_admin' } }));
+router.get('/admin/keys',         (req, res) => res.render('adminKeys',       { title: 'Keys',       user: { role: 'super_admin' } }));
+router.get('/admin/users',        (req, res) => res.render('adminUsers',      { title: 'Users',      user: { role: 'super_admin' } }));
 
-export default viewRoute;
+// ─── Pharmacist / facility admin pages ───────────────
+router.get('/dashboard',      (req, res) => res.render('dashboard',       { title: 'Dashboard',   user: true }));
+router.get('/inventory',      (req, res) => res.render('inventory',       { title: 'Inventory',   user: true }));
+router.get('/inventory/add',  (req, res) => res.render('inventoryAdd',    { title: 'Add Drug',    user: true }));
+router.get('/inventory/:id',  (req, res) => res.render('inventoryDetail', { title: 'Drug Detail', user: true }));
+router.get('/sales',          (req, res) => res.render('sales',           { title: 'Sales',       user: true }));
+router.get('/sales/new',      (req, res) => res.render('salesNew',        { title: 'Record Sale', user: true }));
+router.get('/scan',           (req, res) => res.render('scan',            { title: 'Scan Drug',   user: true }));
+router.get('/alerts',         (req, res) => res.render('alerts',          { title: 'Alerts',      user: true }));
+router.get('/profile',        (req, res) => res.render('profile',         { title: 'Profile',     user: true }));
+
+export default router;
