@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
-import User from './src/models/User.js';
+import User from './src/models/user.js';
 
 mongoose.connect(process.env.MONGO_URI).then(async () => {
   const superAdmin = await User.findOne({ email: 'okepeter83@gmail.com' });

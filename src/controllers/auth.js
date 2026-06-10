@@ -60,12 +60,13 @@ const authController = {
       const fullName = `${user.lastName} ${user.firstName}`;
 
       res.status(200).json({
-        status:   'success',
-        message:  'Login successful',
-        name:     fullName,
-        role:     user.role,
-        facility: user.facility_id ? user.facility_id.name : null,
-        email:    user.email,
+        status:    'success',
+        message:   'Login successful',
+        name:      fullName,
+        role:      user.role,
+        facility:  user.facility_id ? user.facility_id.name : null,
+        email:     user.email,
+        isKeyVerified: user.isKeyVerified,
       });
 
     } catch (err) {

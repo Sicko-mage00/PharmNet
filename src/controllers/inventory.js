@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 import Drug from '../models/drug.js';
 
+const parseFacilityId = (req, res, next) => {
+  if (req.user && req.user.facility_id) {
+    // Attach the casted ObjectId directly to the request object
+    req.facilityObjectId = new mongoose.Types.ObjectId(req.user.facility_id.toString());
+  }
+  next();
+};
+
 const inventoryController = {
 
   // ─── ADD DRUG ──────────────────────────────────────────
@@ -29,9 +37,8 @@ const inventoryController = {
 
       // facility_id comes from the logged in user — not from req.body
       // a pharmacist can only add drugs to their own facility
-      const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
       const drug = await Drug.create({
-            facility_id: facility_id,
+            facility_id: req.facilityObjectId,
             drug_name,
             generic_name,
             barcode,
@@ -66,9 +73,8 @@ const inventoryController = {
   // GET /api/inventory
   getAllDrugs: async (req, res) => {
     try {
-      const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
       const drugs = await Drug.find({
-        facility_id: facility_id,
+        facility_id: req.facilityObjectId,
         isActive: true,
       }).sort({ drug_name: 1 });
 
@@ -87,10 +93,9 @@ const inventoryController = {
   // GET /api/inventory/:id
   getDrug: async (req, res) => {
     try {
-      const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
       const drug = await Drug.findOne({
         _id: req.params.id,
-        facility_id: facility_id, // ensures facility isolation
+        facility_id: req.facilityObjectId, // ensures facility isolation
       });
 
         if (!drug) {
@@ -123,9 +128,8 @@ const inventoryController = {
             expiry_alert_days,
         } = req.body;
 
-            const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
             const drug = await Drug.findOneAndUpdate(
-                { _id: req.params.id, facility_id: facility_id },
+                { _id: req.params.id, facility_id: req.facilityObjectId },
                 { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days },
                 { returnDocument: 'after', runValidators: true }
             );
@@ -150,9 +154,8 @@ const inventoryController = {
   // soft delete — never actually remove drug records
   deactivateDrug: async (req, res) => {
     try {
-        const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
         const drug = await Drug.findOneAndUpdate(
-            { _id: req.params.id, facility_id: facility_id },
+            { _id: req.params.id, facility_id: req.facilityObjectId },
             { isActive: false },
             { returnDocument: 'after' }
         );
@@ -183,10 +186,9 @@ const inventoryController = {
             message: 'batch_number, quantity and expiry_date are required',
             });
         }
-        const facility_id = new mongoose.Types.ObjectId(req.user.facility_id.toString());
         const drug = await Drug.findOne({
             _id: req.params.id,
-            facility_id: facility_id,
+            facility_id: req.facilityObjectId,
         });
 
         if (!drug) {

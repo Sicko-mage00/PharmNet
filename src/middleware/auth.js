@@ -28,6 +28,7 @@ export const protect = async (req, res, next) => {
         '/api/auth/profile',
         '/verify',
         '/profile',
+        '/admin',
       ];
 
       const isAllowed = allowedPaths.some(p => pathOnly.startsWith(p));

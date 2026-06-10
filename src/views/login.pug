@@ -46,29 +46,34 @@ block scripts
         const password = document.getElementById('password').value;
 
         try {
-            const res = await fetch('/api/auth/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ email, password }),
-            });
+          const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ email, password }),
+          });
 
-            const data = await res.json();
+          const data = await res.json();
 
-            if (res.ok) {
-              localStorage.setItem('user', JSON.stringify({
+          if (res.ok) {
+            localStorage.setItem('user', JSON.stringify({
+              name:     data.name,
+              role:     data.role,
+              facility: data.facility,
+              email:    data.email || '',
+            }));
 
-                  name:     data.name,
-                  role:     data.role,
-                  facility: data.facility,
-              }));
-              window.location.href = data.role === null ? 
-                '/verify' : '/dashboard';
+            // super_admin goes straight to admin page
+            if (data.role === 'super_admin') {
+              window.location.href = '/admin';
+            } else if (!data.isKeyVerified || data.role === null) {
+              window.location.href = '/verify';
             } else {
-              alert(data.message || 'Login failed');
+              window.location.href = '/dashboard';
             }
+          }
         } catch (err) {
-            alert('Something went wrong');
+          alert('Something went wrong');
         }
     });
 
