@@ -1,0 +1,253 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Users
+
+  .card
+    .card-title
+      span All Registered Users
+      .search-wrapper
+        input.form-control#user-search(
+          type='text'
+          placeholder='Search name or email...'
+          oninput='filterUsers(this.value)'
+          autocomplete='off'
+        )
+
+    .table-wrapper
+      table.users-main-table
+        thead
+          tr
+            th Name
+            th Email
+            th Role
+            th Facility
+            th Verified
+            th Joined
+            th Actions
+        tbody#users-table
+          tr
+            td(colspan='7')
+              .loader
+                .spinner
+                |  Loading...
+
+  //- ── Change Role Modal ───────────────────────
+  .modal-backdrop#role-modal(style='display:none')
+    .modal-box(style='max-width:400px')
+      .modal-header
+        h3 Change User Role
+        button.modal-close#close-role ✕
+      .rm-user-label#rm-user-label
+      .form-group(style='margin-top:0.2rem')
+        label New Role
+        select.form-control#rm-role
+          option(value='pharmacist') Pharmacist
+          option(value='facility_admin') Facility Admin
+          option(value='super_admin') Super Admin
+      input(type='hidden' id='rm-user-id')
+      #role-result
+      .modal-footer
+        button.btn.btn-ghost(type='button' id='cancel-role') Cancel
+        button.btn.btn-primary(onclick='saveRole()') Save Role
+
+block scripts
+  style.
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 1rem;
+    }
+    .modal-box {
+      background: #fff; border-radius: 14px; padding: 1.75rem;
+      width: 100%; max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.2rem; border-bottom: 1px solid #e8eaed; padding-bottom: 0.9rem;
+    }
+    .modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+    .modal-close {
+      background: #f0f2f5; border: none; font-size: 1rem; cursor: pointer;
+      color: #5f6b7a; padding: 0.3rem 0.6rem; border-radius: 6px;
+    }
+    .modal-close:hover { background: #dde1e7; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid #e8eaed; }
+    .rm-user-label {
+      background: #f0f2f5; border-radius: 8px;
+      padding: 0.55rem 0.9rem; font-weight: 700;
+      font-size: 0.95rem; color: #0d1b2a;
+      margin-bottom: 1rem; word-break: break-word;
+    }
+    /* Search */
+    .search-wrapper { flex: 1; max-width: 280px; }
+    .search-wrapper input { margin: 0; }
+    .card-title { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; }
+    /* Users table */
+    .users-main-table { table-layout: fixed; width: 100%; }
+    .users-main-table th:nth-child(1),
+    .users-main-table td:nth-child(1) { width: 17%; }
+    .users-main-table th:nth-child(2),
+    .users-main-table td:nth-child(2) { width: 20%; }
+    .users-main-table th:nth-child(3),
+    .users-main-table td:nth-child(3) { width: 13%; }
+    .users-main-table th:nth-child(4),
+    .users-main-table td:nth-child(4) { width: 17%; }
+    .users-main-table th:nth-child(5),
+    .users-main-table td:nth-child(5) { width: 10%; }
+    .users-main-table th:nth-child(6),
+    .users-main-table td:nth-child(6) { width: 11%; }
+    .users-main-table th:nth-child(7),
+    .users-main-table td:nth-child(7) { width: 12%; }
+    /* Name cell — single line with ellipsis on overflow */
+    .name-cell {
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 0; /* needed for text-overflow in table-layout:fixed */
+    }
+    .name-cell[title]:hover { cursor: default; }
+    .email-cell {
+      font-size: 0.82rem; color: #5f6b7a;
+      white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; max-width: 0;
+    }
+    .facility-cell {
+      font-size: 0.85rem;
+      white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; max-width: 0;
+    }
+    @media (max-width: 768px) {
+      .users-main-table th:nth-child(4),
+      .users-main-table td:nth-child(4),
+      .users-main-table th:nth-child(5),
+      .users-main-table td:nth-child(5),
+      .users-main-table th:nth-child(6),
+      .users-main-table td:nth-child(6) { display: none; }
+      .users-main-table th:nth-child(1),
+      .users-main-table td:nth-child(1) { width: 30%; }
+      .users-main-table th:nth-child(2),
+      .users-main-table td:nth-child(2) { width: 35%; }
+      .users-main-table th:nth-child(3),
+      .users-main-table td:nth-child(3) { width: 20%; }
+      .users-main-table th:nth-child(7),
+      .users-main-table td:nth-child(7) { width: 15%; }
+    }
+
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const openModal  = (id) => document.getElementById(id).style.display = 'flex';
+      const closeModal = (id) => document.getElementById(id).style.display = 'none';
+
+      document.querySelectorAll('.modal-backdrop').forEach(m => {
+        m.addEventListener('click', (e) => { if (e.target === m) m.style.display = 'none'; });
+      });
+      document.getElementById('close-role').onclick   = () => closeModal('role-modal');
+      document.getElementById('cancel-role').onclick  = () => closeModal('role-modal');
+
+      const toTitle = s => (s||'').replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+
+      let allUsers = [];
+
+      // Load users from server
+      fetch('/api/admin/users', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          allUsers = data.users || [];
+          renderUsers(allUsers);
+        })
+        .catch(() => {
+          document.getElementById('users-table').innerHTML =
+            `<tr><td colspan="7"><div class="flash flash-error">Failed to load users</div></td></tr>`;
+        });
+
+      // Search — case-insensitive, matches any part of first, last, full name, or email
+      window.filterUsers = (q) => {
+        const term = q.trim().toLowerCase();
+        if (!term) { renderUsers(allUsers); return; }
+        renderUsers(allUsers.filter(u => {
+          const full  = `${u.firstName} ${u.lastName}`.toLowerCase();
+          const rev   = `${u.lastName} ${u.firstName}`.toLowerCase();
+          const email = (u.email || '').toLowerCase();
+          return full.includes(term) || rev.includes(term) || email.includes(term);
+        }));
+      };
+
+      const renderUsers = (users) => {
+        const tbody = document.getElementById('users-table');
+        if (!users.length) {
+          tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No users found</p></div></td></tr>`;
+          return;
+        }
+        tbody.innerHTML = users.map(u => {
+          const fullName = toTitle(`${u.firstName} ${u.lastName}`);
+          const roleClass = u.role === 'super_admin' ? 'badge-ok'
+                          : u.role === 'facility_admin' ? 'badge-warning' : 'badge-pending';
+          return `
+            <tr>
+              <td class="name-cell" title="${fullName}">${fullName}</td>
+              <td class="email-cell" title="${u.email}">${u.email}</td>
+              <td><span class="badge ${roleClass}">${(u.role||'—').replace(/_/g,' ')}</span></td>
+              <td class="facility-cell" title="${u.facility_id ? u.facility_id.name : '—'}">${u.facility_id ? u.facility_id.name : '—'}</td>
+              <td>${u.isKeyVerified
+                ? '<span class="badge badge-ok">✓</span>'
+                : '<span class="badge badge-declined">✗</span>'
+              }</td>
+              <td style="font-size:0.8rem;color:#8492a6">${new Date(u.created_at).toLocaleDateString('en-NG')}</td>
+              <td>
+                <button class="btn btn-sm btn-ghost"
+                  onclick="openRoleModal('${u._id}','${fullName.replace(/'/g,"\\'")}','${u.role||''}')">
+                  Role
+                </button>
+              </td>
+            </tr>`;
+        }).join('');
+      };
+
+      // Open role modal
+      window.openRoleModal = (id, name, role) => {
+        document.getElementById('rm-user-id').value          = id;
+        document.getElementById('rm-user-label').textContent = name;
+        document.getElementById('rm-role').value             = role || 'pharmacist';
+        document.getElementById('role-result').innerHTML     = '';
+        openModal('role-modal');
+      };
+
+      // Save role — immediately updates backend session via PATCH
+      window.saveRole = async () => {
+        const id     = document.getElementById('rm-user-id').value;
+        const role   = document.getElementById('rm-role').value;
+        const result = document.getElementById('role-result');
+        const btn    = document.querySelector('#role-modal .btn-primary');
+        btn.disabled = true; btn.textContent = 'Saving...';
+        result.innerHTML = '';
+
+        try {
+          const res = await fetch(`/api/admin/users/${id}/role`, {
+            method:  'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ role }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            result.innerHTML = `<div class="flash flash-success" style="margin-top:0.8rem">✓ Role updated — takes effect immediately</div>`;
+            // Update local cache so table reflects change without reload
+            const u = allUsers.find(u => u._id === id);
+            if (u) u.role = role;
+            renderUsers(allUsers);
+            setTimeout(() => closeModal('role-modal'), 1200);
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">${data.message}</div>`;
+          }
+        } catch {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">Network error</div>`;
+        } finally {
+          btn.disabled = false; btn.textContent = 'Save Role';
+        }
+      };
+    });

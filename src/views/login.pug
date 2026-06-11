@@ -57,10 +57,11 @@ block scripts
 
           if (res.ok) {
             localStorage.setItem('user', JSON.stringify({
-              name:     data.name,
-              role:     data.role,
-              facility: data.facility,
-              email:    data.email || '',
+              name:       data.name,
+              role:       data.role,
+              facility:   data.facility,
+              facilityId: data.facilityId || null,
+              email:      data.email || '',
             }));
 
             // super_admin goes straight to admin page

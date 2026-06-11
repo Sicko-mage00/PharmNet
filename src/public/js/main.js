@@ -8,6 +8,10 @@ const setUser = (data) => {
   localStorage.setItem('user', JSON.stringify(data));
 };
 
+// ─── Title-case helper ────────────────────────────────
+const toTitleCase = (str) =>
+  (str || '').replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
 // ─── Password toggle ──────────────────────────────────
 const togglePassword = (toggleId, inputId) => {
   const toggle = document.getElementById(toggleId);
@@ -48,23 +52,70 @@ const countUp = (el, target, duration = 800) => {
 // ─── DOM ready ────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
 
-  const user = getUser();
   const currentPath = window.location.pathname;
 
-  // ── Topbar user info ──────────────────────────────
-  if (user) {
+  // ── Auth guard — fetch fresh profile from server ──
+  // This is the single source of truth; we do NOT trust localStorage for role checks
+  const adminPaths    = ['/admin'];
+  const protectedPaths = ['/dashboard','/inventory','/sales','/alerts','/profile','/verify','/scan'];
+  const isAdminPath    = adminPaths.some(p => currentPath.startsWith(p));
+  const isProtected    = protectedPaths.some(p => currentPath.startsWith(p));
+
+  if (isAdminPath || isProtected) {
+    fetch('/api/auth/profile', { credentials: 'include' })
+      .then(r => {
+        if (!r.ok) {
+          window.location.href = '/login';
+          return null;
+        }
+        return r.json();
+      })
+      .then(data => {
+        if (!data) return;
+        const serverUser = data.user;
+
+        // If a normal user somehow hits an admin page, boot them
+        if (isAdminPath && serverUser.role !== 'super_admin') {
+          window.location.href = '/dashboard';
+          return;
+        }
+        // If admin hits a normal protected page, redirect to admin
+        if (!isAdminPath && serverUser.role === 'super_admin') {
+          window.location.href = '/admin';
+          return;
+        }
+
+        // Sync localStorage with fresh server data so topbar is always accurate
+        const fullName = toTitleCase(`${serverUser.firstName} ${serverUser.lastName}`);
+        const stored = {
+          name:       fullName,
+          role:       serverUser.role,
+          email:      serverUser.email,
+          facility:   serverUser.facility_id ? serverUser.facility_id.name : null,
+          facilityId: serverUser.facility_id ? serverUser.facility_id._id  : null,
+        };
+        setUser(stored);
+        initTopbar(stored);
+      })
+      .catch(() => window.location.href = '/login');
+  } else {
+    // Public page — still init topbar from cache if available
+    const cached = getUser();
+    if (cached) initTopbar(cached);
+  }
+
+  // ── Topbar initialiser ────────────────────────────
+  function initTopbar(user) {
     const nameEl         = document.getElementById('user-name');
     const roleEl         = document.getElementById('user-role');
     const avatarEl       = document.getElementById('user-avatar');
-    const facilityEl     = document.getElementById('topbar-facility');
     const facilityNameEl = document.getElementById('topbar-facility-name');
 
-    if (nameEl)     nameEl.textContent     = (user.name     || 'User').toUpperCase();
-    if (roleEl)     roleEl.textContent     = (user.role     || '').replace(/_/g, ' ').toUpperCase();
-    if (facilityEl) facilityEl.textContent = (user.facility || '—').toUpperCase();
+    if (nameEl)         nameEl.textContent = toTitleCase(user.name || 'User');
+    if (roleEl)         roleEl.textContent = (user.role || '').replace(/_/g, ' ').toUpperCase();
     if (facilityNameEl && user.facility) facilityNameEl.textContent = user.facility;
 
-    // profile photo — stored per-user by email key
+    // Profile photo — stored per-user by email key
     const photoKey   = `profile_photo_${user.email || 'default'}`;
     const savedPhoto = localStorage.getItem(photoKey);
     if (avatarEl) {
@@ -76,12 +127,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ── Active nav ────────────────────────────────────
+  // ── Active nav — no full-page reload on same section ──
   document.querySelectorAll('.nav-item').forEach(item => {
     const href = item.getAttribute('href');
-    if (href && href !== '#' && currentPath.startsWith(href) && href !== '/') {
+    if (!href || href === '#') return;
+
+    // Mark active
+    if (currentPath.startsWith(href) && href !== '/') {
       item.classList.add('active');
     }
+
+    // Prevent reload when clicking the already-active link
+    item.addEventListener('click', (e) => {
+      if (currentPath === href || (href !== '/' && currentPath.startsWith(href) && item.classList.contains('active'))) {
+        e.preventDefault();
+      }
+    });
   });
 
   // ── Sidebar toggle ────────────────────────────────
@@ -105,6 +166,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   overlay.addEventListener('click', closeSidebar);
 
+  // Close sidebar when any nav-item is clicked on mobile
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth < 768) closeSidebar();
+    });
+  });
+
   // ── Logout ────────────────────────────────────────
   document.getElementById('logout-btn')?.addEventListener('click', async (e) => {
     e.preventDefault();
@@ -114,90 +182,85 @@ document.addEventListener('DOMContentLoaded', () => {
     window.location.href = '/login';
   });
 
-  // ── Alerts bell check ─────────────────────────────
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
+  // ── Alerts bell — only for non-admin ─────────────
+  const user = getUser();
+  if (user && user.role !== 'super_admin') {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
 
-  let lastAlertCount = parseInt(localStorage.getItem('last_alert_count') || '0');
+    let lastAlertCount = parseInt(localStorage.getItem('last_alert_count') || '0');
 
-  const checkAlerts = () => {
-    fetch('/api/alerts', { credentials: 'include' })
-      .then(r => { if (!r.ok) return null; return r.json(); })
-      .then(data => {
-        if (!data) return;
-        const pending = (data.alerts || []).filter(a => a.status === 'pending');
-        const count   = pending.length;
+    const checkAlerts = () => {
+      fetch('/api/alerts', { credentials: 'include' })
+        .then(r => { if (!r.ok) return null; return r.json(); })
+        .then(data => {
+          if (!data) return;
+          const pending = (data.alerts || []).filter(a => a.status === 'pending');
+          const count   = pending.length;
 
-        const badge = document.getElementById('alert-count');
-        const bell  = document.getElementById('topbar-alert-btn');
-        const dot   = document.getElementById('topbar-alert-dot');
+          const badge = document.getElementById('alert-count');
+          const bell  = document.getElementById('topbar-alert-btn');
+          const dot   = document.getElementById('topbar-alert-dot');
 
-        if (badge) {
-          badge.textContent = count > 0 ? count : '';
-          badge.classList.toggle('visible', count > 0);
-        }
-        if (bell && dot) {
-          bell.classList.toggle('has-alerts', count > 0);
-          dot.classList.toggle('visible',     count > 0);
-          dot.classList.toggle('pulse',        count > 0);
-        }
+          if (badge) {
+            badge.textContent = count > 0 ? count : '';
+            badge.classList.toggle('visible', count > 0);
+          }
+          if (bell && dot) {
+            bell.classList.toggle('has-alerts', count > 0);
+            dot.classList.toggle('visible',     count > 0);
+            dot.classList.toggle('pulse',        count > 0);
+          }
 
-        if (count > lastAlertCount && Notification.permission === 'granted' && pending[0]) {
-          new Notification('PharmaNet Alert', {
-            body: `${pending[0].type} Alert — ${pending[0].drug_name}. Action required.`,
-            icon: '/favicon.ico',
-          });
-        }
+          if (count > lastAlertCount && Notification.permission === 'granted' && pending[0]) {
+            new Notification('PharmaNet Alert', {
+              body: `${pending[0].type} Alert — ${pending[0].drug_name}. Action required.`,
+              icon: '/favicon.ico',
+            });
+          }
 
-        lastAlertCount = count;
-        localStorage.setItem('last_alert_count', count);
-      })
-      .catch(() => {});
-  };
-
-  checkAlerts();
-  setInterval(checkAlerts, 30000);
-
-  // ── Socket.io ─────────────────────────────────────
-  if (user?.facilityId) {
-    const s    = document.createElement('script');
-    s.src      = '/socket.io/socket.io.js';
-    s.onload   = () => {
-      const socket = io({ withCredentials: true });
-      socket.emit('join_facility', user.facilityId);
-
-      socket.on('new_alert', (data) => {
-        if (Notification.permission === 'granted') {
-          new Notification('PharmaNet — New Alert', { body: data.message, icon: '/favicon.ico' });
-        }
-        document.getElementById('topbar-alert-btn')?.classList.add('has-alerts');
-        document.getElementById('topbar-alert-dot')?.classList.add('visible', 'pulse');
-        checkAlerts();
-        if (currentPath === '/alerts') setTimeout(() => window.location.reload(), 800);
-      });
-
-      socket.on('alert_cancelled', () => {
-        checkAlerts();
-        if (currentPath === '/alerts') setTimeout(() => window.location.reload(), 800);
-      });
-
-      socket.on('drugs_dispatched', (data) => {
-        if (Notification.permission === 'granted') {
-          new Notification('PharmaNet — Dispatched', { body: data.message, icon: '/favicon.ico' });
-        }
-        checkAlerts();
-      });
+          lastAlertCount = count;
+          localStorage.setItem('last_alert_count', count);
+        })
+        .catch(() => {});
     };
-    document.head.appendChild(s);
-  }
 
-  // ── Auth guard ────────────────────────────────────
-  const protected_ = ['/dashboard','/inventory','/sales','/alerts','/profile','/verify','/facilities','/keys','/scan','/admin'];
-  if (protected_.some(p => currentPath.startsWith(p))) {
-    fetch('/api/auth/profile', { credentials: 'include' })
-      .then(r => { if (!r.ok) window.location.href = '/login'; })
-      .catch(() => window.location.href = '/login');
+    checkAlerts();
+    setInterval(checkAlerts, 30000);
+
+    // ── Socket.io ──────────────────────────────────
+    if (user?.facilityId) {
+      const s    = document.createElement('script');
+      s.src      = '/socket.io/socket.io.js';
+      s.onload   = () => {
+        const socket = io({ withCredentials: true });
+        socket.emit('join_facility', user.facilityId);
+
+        socket.on('new_alert', (data) => {
+          if (Notification.permission === 'granted') {
+            new Notification('PharmaNet — New Alert', { body: data.message, icon: '/favicon.ico' });
+          }
+          document.getElementById('topbar-alert-btn')?.classList.add('has-alerts');
+          document.getElementById('topbar-alert-dot')?.classList.add('visible', 'pulse');
+          checkAlerts();
+          if (currentPath === '/alerts') setTimeout(() => window.location.reload(), 800);
+        });
+
+        socket.on('alert_cancelled', () => {
+          checkAlerts();
+          if (currentPath === '/alerts') setTimeout(() => window.location.reload(), 800);
+        });
+
+        socket.on('drugs_dispatched', (data) => {
+          if (Notification.permission === 'granted') {
+            new Notification('PharmaNet — Dispatched', { body: data.message, icon: '/favicon.ico' });
+          }
+          checkAlerts();
+        });
+      };
+      document.head.appendChild(s);
+    }
   }
 
 });

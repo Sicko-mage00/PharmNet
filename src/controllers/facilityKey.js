@@ -17,7 +17,6 @@ const facilityKeyController = {
         return res.status(404).json({ message: 'Facility not found' });
       }
 
-      // generate random unique code e.g A3F2B1C9
       const code = crypto.randomBytes(4).toString('hex').toUpperCase();
 
       const expiresAt = new Date(
@@ -26,7 +25,7 @@ const facilityKeyController = {
 
       const key = await FacilityKey.create({
         facility_id,
-        name: facility.name, // store facility name for easy reference in listings
+        name: facility.name,
         code,
         role,
         maxUses: maxUses || 1,
@@ -37,10 +36,10 @@ const facilityKeyController = {
       res.status(201).json({
         message: 'Key generated successfully',
         key: {
-          code: key.code,
+          code:     key.code,
           facility: facility.name,
-          role: key.role,
-          maxUses: key.maxUses,
+          role:     key.role,
+          maxUses:  key.maxUses,
           expiresAt: key.expiresAt,
         },
       });
@@ -69,14 +68,36 @@ const facilityKeyController = {
   deactivateKey: async (req, res) => {
     try {
       const key = await FacilityKey.findById(req.params.id);
-      if (!key) {
-        return res.status(404).json({ message: 'Key not found' });
-      }
+      if (!key) return res.status(404).json({ message: 'Key not found' });
 
       key.isActive = false;
       await key.save();
 
-      res.status(200).json({ message: 'Key deactivated successfully' });
+      res.status(200).json({ message: 'Key deactivated' });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  // ─── REACTIVATE KEY ────────────────────────────────────
+  // PATCH /api/facility-keys/:id/reactivate
+  reactivateKey: async (req, res) => {
+    try {
+      const key = await FacilityKey.findById(req.params.id);
+      if (!key) return res.status(404).json({ message: 'Key not found' });
+
+      // Only reactivate if not expired AND not fully used
+      if (new Date(key.expiresAt) < new Date()) {
+        return res.status(400).json({ message: 'Key is expired — generate a new one instead' });
+      }
+      if (key.usedCount >= key.maxUses) {
+        return res.status(400).json({ message: 'Key has reached max uses — generate a new one' });
+      }
+
+      key.isActive = true;
+      await key.save();
+
+      res.status(200).json({ message: 'Key reactivated', key });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }

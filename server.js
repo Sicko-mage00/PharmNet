@@ -16,6 +16,7 @@ import inventoryRoute from './src/routes/inventory.js';
 import saleRoute from './src/routes/sale.js';
 import alertRoute from './src/routes/alert.js';
 import viewRoute from './src/routes/view.js';
+import adminRoute from './src/routes/admin.js';
 import { checkExpiredAlerts } from './src/services/alertExpiry.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,6 +67,7 @@ app.use('/api/facility-keys', facilityKeyRoute);
 app.use('/api/inventory', inventoryRoute);
 app.use('/api/sales', saleRoute);
 app.use('/api/alerts', alertRoute);
+app.use('/api/admin', adminRoute);
 
 httpServer.listen(process.env.PORT || 3000, () => {
   console.log(`Server running on port ${process.env.PORT || 3000}`);

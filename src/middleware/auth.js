@@ -17,6 +17,9 @@ export const protect = async (req, res, next) => {
 
     // 3. attach user to request
     req.user = user;
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
 
     // 4. second gate — block unverified users
     if (!req.user.isKeyVerified && req.user.role !== 'super_admin') {

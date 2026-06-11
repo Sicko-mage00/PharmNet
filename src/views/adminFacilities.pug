@@ -1,0 +1,395 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Facilities
+    button.btn.btn-primary#open-create-btn + New Facility
+
+  .card
+    .table-wrapper
+      table.facilities-main-table
+        thead
+          tr
+            th Name
+            th Type
+            th City / State
+            th Phone
+            th Network
+            th Actions
+        tbody#facilities-table
+          tr
+            td(colspan='6')
+              .loader
+                .spinner
+                |  Loading...
+
+  //- ── Create Facility Modal ──────────────────
+  .modal-backdrop#create-facility-modal(style='display:none')
+    .modal-box
+      .modal-header
+        h3 Create Facility
+        button.modal-close#close-create ✕
+      form#facility-form
+        .form-row
+          .form-group
+            label Facility Name
+            input.form-control(type='text' id='f-name' placeholder='e.g Lagos General Hospital' required)
+          .form-group
+            label Type
+            select.form-control#f-type
+              option(value='hospital') Hospital
+              option(value='pharmacy') Pharmacy
+              option(value='clinic') Clinic
+              option(value='warehouse') Warehouse
+        .form-group
+          label Phone
+          input.form-control(type='tel' id='f-phone' placeholder='e.g 08012345678' required)
+        .form-row
+          .form-group
+            label Street (optional)
+            input.form-control(type='text' id='f-street' placeholder='e.g 12 Marina Road')
+          .form-group
+            label City
+            input.form-control(type='text' id='f-city' placeholder='e.g Lagos' required)
+        .form-group
+          label State
+          input.form-control(type='text' id='f-state' placeholder='e.g Lagos' required)
+        #facility-result
+        .modal-footer
+          button.btn.btn-ghost(type='button' id='cancel-create') Cancel
+          button.btn.btn-primary(type='submit') Create Facility
+
+  //- ── Edit Facility Modal ────────────────────
+  .modal-backdrop#edit-facility-modal(style='display:none')
+    .modal-box
+      .modal-header
+        h3 Edit Facility
+        button.modal-close#close-edit ✕
+      form#edit-facility-form
+        input(type='hidden' id='ef-id')
+        .form-row
+          .form-group
+            label Facility Name
+            input.form-control(type='text' id='ef-name' required)
+          .form-group
+            label Type
+            select.form-control#ef-type
+              option(value='hospital') Hospital
+              option(value='pharmacy') Pharmacy
+              option(value='clinic') Clinic
+              option(value='warehouse') Warehouse
+        .form-group
+          label Phone
+          input.form-control(type='tel' id='ef-phone' required)
+        .form-row
+          .form-group
+            label Street
+            input.form-control(type='text' id='ef-street')
+          .form-group
+            label City
+            input.form-control(type='text' id='ef-city' required)
+        .form-group
+          label State
+          input.form-control(type='text' id='ef-state' required)
+        #edit-facility-result
+        .modal-footer
+          button.btn.btn-ghost(type='button' id='cancel-edit') Cancel
+          button.btn.btn-primary(type='submit') Save Changes
+
+  //- ── Generate Key Modal ─────────────────────
+  .modal-backdrop#key-modal(style='display:none')
+    .modal-box
+      .modal-header
+        h3 Generate Invite Key
+        button.modal-close#close-key ✕
+      .key-modal-facility-label#key-modal-facility-label —
+      form#key-form
+        input(type='hidden' id='k-facility-id')
+        .form-group
+          label Role to Grant
+          select.form-control#k-role
+            option(value='pharmacist') Pharmacist
+            option(value='facility_admin') Facility Admin
+        .form-row
+          .form-group
+            label Max Uses
+            input.form-control(type='number' id='k-uses' value='5' min='1')
+          .form-group
+            label Expires In (days)
+            input.form-control(type='number' id='k-days' value='7' min='1')
+        #key-result
+        .modal-footer
+          button.btn.btn-ghost(type='button' id='cancel-key') Cancel
+          button.btn.btn-success(type='submit') Generate Key
+
+block scripts
+  style.
+    /* ── Admin modal styles ── */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 1rem;
+    }
+    .modal-box {
+      background: #fff; border-radius: 14px; padding: 1.75rem;
+      width: 100%; max-width: 540px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.4rem; border-bottom: 1px solid #e8eaed; padding-bottom: 0.9rem;
+    }
+    .modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #0d1b2a; }
+    .modal-close {
+      background: #f0f2f5; border: none; font-size: 1rem; cursor: pointer;
+      color: #5f6b7a; padding: 0.3rem 0.6rem; border-radius: 6px; line-height: 1;
+      transition: background 0.15s;
+    }
+    .modal-close:hover { background: #dde1e7; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid #e8eaed; }
+    .key-modal-facility-label {
+      background: #e8f0fe; color: #0052CC; border-radius: 8px;
+      padding: 0.6rem 1rem; font-weight: 600; font-size: 0.9rem;
+      margin-bottom: 1.2rem; word-break: break-word;
+    }
+    /* ── Facilities table ── */
+    .facilities-main-table { table-layout: fixed; width: 100%; }
+    .facilities-main-table th:nth-child(1),
+    .facilities-main-table td:nth-child(1) { width: 30%; word-break: break-word; }
+    .facilities-main-table th:nth-child(2),
+    .facilities-main-table td:nth-child(2) { width: 12%; }
+    .facilities-main-table th:nth-child(3),
+    .facilities-main-table td:nth-child(3) { width: 16%; }
+    .facilities-main-table th:nth-child(4),
+    .facilities-main-table td:nth-child(4) { width: 15%; }
+    .facilities-main-table th:nth-child(5),
+    .facilities-main-table td:nth-child(5) { width: 12%; }
+    .facilities-main-table th:nth-child(6),
+    .facilities-main-table td:nth-child(6) { width: 15%; }
+    .actions-cell { display: flex; gap: 0.4rem; flex-wrap: nowrap; }
+    .key-success-box {
+      background: #f0faf5; border: 1px solid #1a9e5c; border-radius: 10px;
+      padding: 1rem 1.2rem; margin-top: 1rem; text-align: center;
+    }
+    .key-success-box .key-code-display {
+      font-size: 1.8rem; font-weight: 800; font-family: 'DM Mono', monospace;
+      color: #0052CC; letter-spacing: 3px; display: block; margin: 0.4rem 0;
+    }
+    .key-success-box small { color: #5f6b7a; font-size: 0.82rem; }
+
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+
+      // ── Modal helpers ──────────────────────────────
+      const openModal  = (id) => document.getElementById(id).style.display = 'flex';
+      const closeModal = (id) => document.getElementById(id).style.display = 'none';
+
+      document.querySelectorAll('.modal-backdrop').forEach(m => {
+        m.addEventListener('click', (e) => { if (e.target === m) m.style.display = 'none'; });
+      });
+
+      document.getElementById('open-create-btn').onclick = () => {
+        document.getElementById('facility-form').reset();
+        document.getElementById('facility-result').innerHTML = '';
+        openModal('create-facility-modal');
+      };
+      document.getElementById('close-create').onclick  = () => closeModal('create-facility-modal');
+      document.getElementById('cancel-create').onclick = () => closeModal('create-facility-modal');
+      document.getElementById('close-edit').onclick    = () => closeModal('edit-facility-modal');
+      document.getElementById('cancel-edit').onclick   = () => closeModal('edit-facility-modal');
+      document.getElementById('close-key').onclick     = () => closeModal('key-modal');
+      document.getElementById('cancel-key').onclick    = () => closeModal('key-modal');
+
+      // ── Load facilities ────────────────────────────
+      window.loadFacilities = () => {
+        const tbody = document.getElementById('facilities-table');
+        tbody.innerHTML = `<tr><td colspan="6"><div class="loader"><div class="spinner"></div> Loading...</div></td></tr>`;
+
+        fetch('/api/facilities', { credentials: 'include' })
+          .then(r => r.json())
+          .then(data => {
+            const fac = data.facilities || [];
+            if (!fac.length) {
+              tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><p>No facilities yet</p></div></td></tr>`;
+              return;
+            }
+            tbody.innerHTML = fac.map(f => `
+              <tr>
+                <td style="font-weight:600;word-break:break-word">${f.name}</td>
+                <td>${f.type}</td>
+                <td>${f.address ? f.address.city + ', ' + f.address.state : '—'}</td>
+                <td style="font-size:0.85rem">${f.phone}</td>
+                <td><span class="badge ${f.isNetworkMember ? 'badge-ok' : 'badge-declined'}">${f.isNetworkMember ? 'Active' : 'Inactive'}</span></td>
+                <td>
+                  <div class="actions-cell">
+                    <button class="btn btn-sm btn-ghost" onclick="openEditModal(
+                      '${f._id}','${escQ(f.name)}','${f.type}','${f.phone}',
+                      '${escQ((f.address||{}).street||'')}','${escQ((f.address||{}).city||'')}','${escQ((f.address||{}).state||'')}'
+                    )">Edit</button>
+                    <button class="btn btn-sm btn-primary" onclick="openKeyModal('${f._id}','${escQ(f.name)}')">+ Key</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('');
+          });
+      };
+
+      const escQ = s => (s || '').replace(/'/g, "\\'");
+
+      // ── Edit modal ────────────────────────────────
+      window.openEditModal = (id, name, type, phone, street, city, state) => {
+        document.getElementById('ef-id').value    = id;
+        document.getElementById('ef-name').value  = name;
+        document.getElementById('ef-type').value  = type;
+        document.getElementById('ef-phone').value = phone;
+        document.getElementById('ef-street').value = street;
+        document.getElementById('ef-city').value  = city;
+        document.getElementById('ef-state').value = state;
+        document.getElementById('edit-facility-result').innerHTML = '';
+        openModal('edit-facility-modal');
+      };
+
+      // ── Key modal ─────────────────────────────────
+      window.openKeyModal = (id, name) => {
+        document.getElementById('k-facility-id').value     = id;
+        document.getElementById('key-modal-facility-label').textContent = name;
+        document.getElementById('key-result').innerHTML    = '';
+        document.getElementById('key-form').reset();
+        document.getElementById('k-facility-id').value     = id; // reset clears hidden too
+        openModal('key-modal');
+      };
+
+      // ── Create facility ───────────────────────────
+      document.getElementById('facility-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn    = e.target.querySelector('button[type="submit"]');
+        const result = document.getElementById('facility-result');
+        btn.disabled = true; btn.textContent = 'Creating...';
+
+        try {
+          const res = await fetch('/api/facilities', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              name:  document.getElementById('f-name').value,
+              type:  document.getElementById('f-type').value,
+              phone: document.getElementById('f-phone').value,
+              address: {
+                street: document.getElementById('f-street').value,
+                city:   document.getElementById('f-city').value,
+                state:  document.getElementById('f-state').value,
+              },
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            result.innerHTML = `<div class="flash flash-success" style="margin-top:0.8rem">✓ <strong>${data.facility.name}</strong> created</div>`;
+            document.getElementById('facility-form').reset();
+            loadFacilities();
+            setTimeout(() => closeModal('create-facility-modal'), 1400);
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">${data.message}</div>`;
+          }
+        } catch {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">Network error</div>`;
+        } finally {
+          btn.disabled = false; btn.textContent = 'Create Facility';
+        }
+      });
+
+      // ── Edit facility ─────────────────────────────
+      document.getElementById('edit-facility-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn    = e.target.querySelector('button[type="submit"]');
+        const result = document.getElementById('edit-facility-result');
+        const id     = document.getElementById('ef-id').value;
+        btn.disabled = true; btn.textContent = 'Saving...';
+
+        try {
+          const res = await fetch(`/api/facilities/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              name:  document.getElementById('ef-name').value,
+              type:  document.getElementById('ef-type').value,
+              phone: document.getElementById('ef-phone').value,
+              address: {
+                street: document.getElementById('ef-street').value,
+                city:   document.getElementById('ef-city').value,
+                state:  document.getElementById('ef-state').value,
+              },
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            result.innerHTML = `<div class="flash flash-success" style="margin-top:0.8rem">✓ Updated successfully</div>`;
+            loadFacilities();
+            setTimeout(() => closeModal('edit-facility-modal'), 1000);
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">${data.message}</div>`;
+          }
+        } catch {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">Network error</div>`;
+        } finally {
+          btn.disabled = false; btn.textContent = 'Save Changes';
+        }
+      });
+
+      // ── Generate key — properly wired ─────────────
+      document.getElementById('key-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn    = e.target.querySelector('button[type="submit"]');
+        const result = document.getElementById('key-result');
+        btn.disabled = true; btn.textContent = 'Generating...';
+        result.innerHTML = '';
+
+        const facilityId = document.getElementById('k-facility-id').value;
+
+        if (!facilityId) {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">No facility selected</div>`;
+          btn.disabled = false; btn.textContent = 'Generate Key';
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/facility-keys/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              facility_id:   facilityId,
+              role:          document.getElementById('k-role').value,
+              maxUses:       parseInt(document.getElementById('k-uses').value) || 5,
+              expiresInDays: parseInt(document.getElementById('k-days').value) || 7,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            result.innerHTML = `
+              <div class="key-success-box">
+                <span style="color:#1a9e5c;font-weight:600">✓ Key Generated</span>
+                <span class="key-code-display">${data.key.code}</span>
+                <small>
+                  Facility: <strong>${data.key.facility}</strong> ·
+                  Role: <strong>${data.key.role}</strong> ·
+                  Max uses: <strong>${data.key.maxUses}</strong> ·
+                  Expires: <strong>${new Date(data.key.expiresAt).toLocaleDateString()}</strong>
+                </small>
+              </div>`;
+            btn.textContent = 'Generate Another';
+            btn.disabled = false;
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">${data.message || 'Failed to generate key'}</div>`;
+            btn.disabled = false; btn.textContent = 'Generate Key';
+          }
+        } catch (err) {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">Network error — check connection</div>`;
+          btn.disabled = false; btn.textContent = 'Generate Key';
+        }
+      });
+
+      loadFacilities();
+    });

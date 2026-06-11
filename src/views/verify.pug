@@ -85,12 +85,11 @@ block scripts
           const data = await res.json();
 
           if (res.ok) {
-            const user = getUser();
+            const user = getUser() || {};
             user.role       = data.role;
-            user.facility = data.facility;
-
-            user.facilityId = document.getElementById('facility_id').value;
-            sessionStorage.setItem('user', JSON.stringify(user));
+            user.facility   = data.facility;
+            user.facilityId = data.facilityId || document.getElementById('facility_id').value;
+            localStorage.setItem('user', JSON.stringify(user));
 
             window.location.href = '/dashboard';
           } else {

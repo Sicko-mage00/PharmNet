@@ -3,14 +3,6 @@ import Alert from '../models/alert.js';
 import Drug from '../models/drug.js';
 import { emitAlert, getIO } from '../services/socket.js';
 
-const parseFacilityId = (req, res, next) => {
-  if (req.user && req.user.facility_id) {
-    // Attach the casted ObjectId directly to the request object
-    req.facilityObjectId = new mongoose.Types.ObjectId(req.user.facility_id.toString());
-  }
-  next();
-};
-
 const alertController = {
 
   // ─── GET ALL ALERTS ────────────────────────────────────
@@ -19,8 +11,8 @@ const alertController = {
 
       const alerts = await Alert.find({
         $or: [
-          { target_facility: req.facilityObjectId },
-          { source_facility: req.facilityObjectId },
+          { target_facility: req.user.facility_id },
+          { source_facility: req.user.facility_id },
         ],
         status: { $nin: ['resolved', 'expired', 'cancelled', 'self_resolved'] },
       })

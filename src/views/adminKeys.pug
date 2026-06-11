@@ -1,0 +1,259 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Invite Keys
+    button.btn.btn-primary#open-key-btn + Generate Key
+
+  .card
+    .table-wrapper
+      table.keys-main-table
+        thead
+          tr
+            th Facility
+            th Code
+            th Role
+            th Uses
+            th Expires
+            th Status
+            th Actions
+        tbody#keys-table
+          tr
+            td(colspan='7')
+              .loader
+                .spinner
+                |  Loading...
+
+  //- ── Generate Key Modal ─────────────────────
+  .modal-backdrop#generate-key-modal(style='display:none')
+    .modal-box
+      .modal-header
+        h3 Generate Invite Key
+        button.modal-close#close-gen-key ✕
+      form#key-form
+        .form-group
+          label Facility
+          select.form-control#k-facility(required)
+            option(value='') -- Select Facility --
+        .form-group
+          label Role to Grant
+          select.form-control#k-role
+            option(value='pharmacist') Pharmacist
+            option(value='facility_admin') Facility Admin
+        .form-row
+          .form-group
+            label Max Uses
+            input.form-control(type='number' id='k-uses' value='5' min='1')
+          .form-group
+            label Expires In (days)
+            input.form-control(type='number' id='k-days' value='7' min='1')
+        #key-result
+        .modal-footer
+          button.btn.btn-ghost(type='button' id='cancel-gen-key') Cancel
+          button.btn.btn-success(type='submit') Generate Key
+
+block scripts
+  style.
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 1rem;
+    }
+    .modal-box {
+      background: #fff; border-radius: 14px; padding: 1.75rem;
+      width: 100%; max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.4rem; border-bottom: 1px solid #e8eaed; padding-bottom: 0.9rem;
+    }
+    .modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; color: #0d1b2a; }
+    .modal-close {
+      background: #f0f2f5; border: none; font-size: 1rem; cursor: pointer;
+      color: #5f6b7a; padding: 0.3rem 0.6rem; border-radius: 6px; line-height: 1;
+    }
+    .modal-close:hover { background: #dde1e7; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.4rem; padding-top: 1rem; border-top: 1px solid #e8eaed; }
+    /* Keys table */
+    .keys-main-table { table-layout: fixed; width: 100%; }
+    .keys-main-table th:nth-child(1),
+    .keys-main-table td:nth-child(1) { width: 25%; word-break: break-word; }
+    .keys-main-table th:nth-child(2),
+    .keys-main-table td:nth-child(2) { width: 14%; }
+    .keys-main-table th:nth-child(3),
+    .keys-main-table td:nth-child(3) { width: 14%; }
+    .keys-main-table th:nth-child(4),
+    .keys-main-table td:nth-child(4) { width: 10%; text-align: center; }
+    .keys-main-table th:nth-child(5),
+    .keys-main-table td:nth-child(5) { width: 13%; }
+    .keys-main-table th:nth-child(6),
+    .keys-main-table td:nth-child(6) { width: 11%; }
+    .keys-main-table th:nth-child(7),
+    .keys-main-table td:nth-child(7) { width: 13%; }
+    code.key-code {
+      display: inline-block;
+      background: #e8f0fe; color: #0052CC;
+      padding: 0.2rem 0.5rem; border-radius: 4px;
+      font-family: 'DM Mono', monospace; font-weight: 700;
+      font-size: 0.85rem; letter-spacing: 1.5px; white-space: nowrap;
+    }
+    .key-success-box {
+      background: #f0faf5; border: 1px solid #1a9e5c; border-radius: 10px;
+      padding: 1rem 1.2rem; margin-top: 1rem; text-align: center;
+    }
+    .key-code-display {
+      font-size: 1.8rem; font-weight: 800; font-family: 'DM Mono', monospace;
+      color: #0052CC; letter-spacing: 3px; display: block; margin: 0.4rem 0;
+    }
+    /* Deactivated row styling */
+    tr.key-inactive { opacity: 0.55; }
+    .btn-reactivate { font-size: 0.75rem; }
+
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+
+      const openModal  = (id) => document.getElementById(id).style.display = 'flex';
+      const closeModal = (id) => document.getElementById(id).style.display = 'none';
+
+      document.querySelectorAll('.modal-backdrop').forEach(m => {
+        m.addEventListener('click', (e) => { if (e.target === m) m.style.display = 'none'; });
+      });
+
+      document.getElementById('open-key-btn').onclick    = () => { resetKeyForm(); openModal('generate-key-modal'); };
+      document.getElementById('close-gen-key').onclick   = () => closeModal('generate-key-modal');
+      document.getElementById('cancel-gen-key').onclick  = () => closeModal('generate-key-modal');
+
+      const resetKeyForm = () => {
+        document.getElementById('key-form').reset();
+        document.getElementById('k-uses').value = '5';
+        document.getElementById('k-days').value = '7';
+        document.getElementById('key-result').innerHTML = '';
+        const btn = document.querySelector('#key-form button[type="submit"]');
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate Key'; }
+      };
+
+      // Load facility dropdown
+      fetch('/api/facilities', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+          const select = document.getElementById('k-facility');
+          (data.facilities || []).forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f._id;
+            opt.textContent = f.name;
+            select.appendChild(opt);
+          });
+        });
+
+      // Load keys table
+      window.loadKeys = () => {
+        const tbody = document.getElementById('keys-table');
+        tbody.innerHTML = `<tr><td colspan="7"><div class="loader"><div class="spinner"></div> Loading...</div></td></tr>`;
+
+        fetch('/api/facility-keys', { credentials: 'include' })
+          .then(r => r.json())
+          .then(data => {
+            const keys = data.keys || [];
+            if (!keys.length) {
+              tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><p>No keys generated yet</p></div></td></tr>`;
+              return;
+            }
+            tbody.innerHTML = keys.map(k => `
+              <tr class="${k.isActive ? '' : 'key-inactive'}">
+                <td style="word-break:break-word;font-weight:600">${k.facility_id ? k.facility_id.name : '—'}</td>
+                <td><code class="key-code">${k.code}</code></td>
+                <td>${(k.role||'').replace(/_/g,' ')}</td>
+                <td style="text-align:center">${k.usedCount} / ${k.maxUses}</td>
+                <td style="font-size:0.82rem">${new Date(k.expiresAt).toLocaleDateString()}</td>
+                <td><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
+                <td>
+                  ${k.isActive
+                    ? `<button class="btn btn-sm btn-danger" onclick="deactivateKey('${k._id}')">Deactivate</button>`
+                    : `<button class="btn btn-sm btn-ghost btn-reactivate" onclick="reactivateKey('${k._id}')">Reactivate</button>`
+                  }
+                </td>
+              </tr>
+            `).join('');
+          });
+      };
+
+      // Deactivate key
+      window.deactivateKey = async (id) => {
+        if (!confirm('Deactivate this key? It can be reactivated later.')) return;
+        const res = await fetch(`/api/facility-keys/${id}/deactivate`, {
+          method: 'PATCH', credentials: 'include',
+        });
+        if (res.ok) loadKeys();
+        else alert('Failed to deactivate');
+      };
+
+      // Reactivate key — PATCH to toggle back
+      window.reactivateKey = async (id) => {
+        if (!confirm('Reactivate this key?')) return;
+        const res = await fetch(`/api/facility-keys/${id}/reactivate`, {
+          method: 'PATCH', credentials: 'include',
+        });
+        if (res.ok) {
+          loadKeys();
+        } else {
+          // Fallback: endpoint may not exist yet — show helpful message
+          const data = await res.json().catch(() => ({}));
+          alert(data.message || 'Reactivate endpoint not yet implemented on backend. Add PATCH /api/facility-keys/:id/reactivate');
+        }
+      };
+
+      // Generate key
+      document.getElementById('key-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn    = e.target.querySelector('button[type="submit"]');
+        const result = document.getElementById('key-result');
+        const facId  = document.getElementById('k-facility').value;
+
+        if (!facId) {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">Please select a facility</div>`;
+          return;
+        }
+
+        btn.disabled = true; btn.textContent = 'Generating...';
+        result.innerHTML = '';
+
+        try {
+          const res = await fetch('/api/facility-keys/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              facility_id:   facId,
+              role:          document.getElementById('k-role').value,
+              maxUses:       parseInt(document.getElementById('k-uses').value) || 5,
+              expiresInDays: parseInt(document.getElementById('k-days').value) || 7,
+            }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            result.innerHTML = `
+              <div class="key-success-box">
+                <span style="color:#1a9e5c;font-weight:600;font-size:0.95rem">✓ Key Generated Successfully</span>
+                <span class="key-code-display">${data.key.code}</span>
+                <small>
+                  <strong>${data.key.facility}</strong> · ${data.key.role} ·
+                  Max ${data.key.maxUses} uses · Expires ${new Date(data.key.expiresAt).toLocaleDateString()}
+                </small>
+              </div>`;
+            loadKeys();
+            btn.textContent = 'Generate Another';
+            btn.disabled = false;
+          } else {
+            result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">${data.message || 'Failed'}</div>`;
+            btn.disabled = false; btn.textContent = 'Generate Key';
+          }
+        } catch {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.8rem">Network error</div>`;
+          btn.disabled = false; btn.textContent = 'Generate Key';
+        }
+      });
+
+      loadKeys();
+    });

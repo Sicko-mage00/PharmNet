@@ -1,14 +1,6 @@
 import mongoose from 'mongoose';
 import Drug from '../models/drug.js';
 
-const parseFacilityId = (req, res, next) => {
-  if (req.user && req.user.facility_id) {
-    // Attach the casted ObjectId directly to the request object
-    req.facilityObjectId = new mongoose.Types.ObjectId(req.user.facility_id.toString());
-  }
-  next();
-};
-
 const inventoryController = {
 
   // ─── ADD DRUG ──────────────────────────────────────────
@@ -38,7 +30,7 @@ const inventoryController = {
       // facility_id comes from the logged in user — not from req.body
       // a pharmacist can only add drugs to their own facility
       const drug = await Drug.create({
-            facility_id: req.facilityObjectId,
+            facility_id: req.user.facility_id,
             drug_name,
             generic_name,
             barcode,
@@ -74,7 +66,7 @@ const inventoryController = {
   getAllDrugs: async (req, res) => {
     try {
       const drugs = await Drug.find({
-        facility_id: req.facilityObjectId,
+        facility_id: req.user.facility_id,
         isActive: true,
       }).sort({ drug_name: 1 });
 
@@ -95,7 +87,7 @@ const inventoryController = {
     try {
       const drug = await Drug.findOne({
         _id: req.params.id,
-        facility_id: req.facilityObjectId, // ensures facility isolation
+        facility_id: req.user.facility_id, // ensures facility isolation
       });
 
         if (!drug) {
@@ -105,6 +97,7 @@ const inventoryController = {
         res.status(200).json({
             status: 'success',
             drug,
+
         });
 
     } catch (err) {
@@ -129,7 +122,7 @@ const inventoryController = {
         } = req.body;
 
             const drug = await Drug.findOneAndUpdate(
-                { _id: req.params.id, facility_id: req.facilityObjectId },
+                { _id: req.params.id, facility_id: req.user.facility_id },
                 { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days },
                 { returnDocument: 'after', runValidators: true }
             );
@@ -155,7 +148,7 @@ const inventoryController = {
   deactivateDrug: async (req, res) => {
     try {
         const drug = await Drug.findOneAndUpdate(
-            { _id: req.params.id, facility_id: req.facilityObjectId },
+            { _id: req.params.id, facility_id: req.user.facility_id },
             { isActive: false },
             { returnDocument: 'after' }
         );
@@ -188,7 +181,7 @@ const inventoryController = {
         }
         const drug = await Drug.findOne({
             _id: req.params.id,
-            facility_id: req.facilityObjectId,
+            facility_id: req.user.facility_id,
         });
 
         if (!drug) {

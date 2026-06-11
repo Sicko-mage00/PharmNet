@@ -22,7 +22,7 @@ html(lang='en')
           nav.sidebar-nav
 
             if user && user.role === 'super_admin'
-              //- SUPER ADMIN SIDEBAR
+              //- SUPER ADMIN SIDEBAR — admin pages only
               a.nav-item(href='/admin')
                 svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
                   rect(x='3' y='3' width='7' height='7' rx='1')
@@ -87,11 +87,12 @@ html(lang='en')
                 span.nav-badge#alert-count
 
           .sidebar-footer
-            a.nav-item(href='/profile')
-              svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
-                path(d='M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2')
-                circle(cx='12' cy='7' r='4')
-              span Profile
+            if user && user.role !== 'super_admin'
+              a.nav-item(href='/profile')
+                svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
+                  path(d='M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2')
+                  circle(cx='12' cy='7' r='4')
+                span Profile
             a.nav-item#logout-btn(href='#')
               svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
                 path(d='M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4')
@@ -109,7 +110,8 @@ html(lang='en')
                   line(x1='3' y1='18' x2='21' y2='18')
               .topbar-brand
                 h1.topbar-title= title || 'PharmaNet'
-                span.topbar-facility-name#topbar-facility-name
+                if user && user.role !== 'super_admin'
+                  span.topbar-facility-name#topbar-facility-name
 
             .topbar-right
               if user && user.role !== 'super_admin'
@@ -119,11 +121,18 @@ html(lang='en')
                     path(d='M13.73 21a2 2 0 01-3.46 0')
                   span.topbar-alert-dot#topbar-alert-dot
 
-              a.topbar-user(href='/profile')
-                .user-avatar#user-avatar ?
-                .user-info
-                  span.user-name#user-name Loading...
-                  span.user-role#user-role —
+              if user && user.role === 'super_admin'
+                .topbar-user
+                  .user-avatar#user-avatar ?
+                  .user-info
+                    span.user-name#user-name Loading...
+                    span.user-role#user-role —
+              else
+                a.topbar-user(href='/profile')
+                  .user-avatar#user-avatar ?
+                  .user-info
+                    span.user-name#user-name Loading...
+                    span.user-role#user-role —
 
           main.page-content
             block content

@@ -1,0 +1,157 @@
+extends layout
+
+block content
+  .page-header
+    h2.page-title Platform Overview
+
+  .stats-grid
+    .stat-card
+      .stat-icon.blue 🏥
+      .stat-info
+        .stat-number#total-facilities 0
+        .stat-label Total Facilities
+    .stat-card
+      .stat-icon.green 🔑
+      .stat-info
+        .stat-number#active-keys 0
+        .stat-label Active Keys
+    .stat-card
+      .stat-icon.orange 👤
+      .stat-info
+        .stat-number#total-users 0
+        .stat-label Registered Users
+    .stat-card
+      .stat-icon.red 🌐
+      .stat-info
+        .stat-number#network-members 0
+        .stat-label Network Members
+
+  .card
+    .card-title
+      span Recent Facilities
+      a.btn.btn-sm.btn-ghost(href='/admin/facilities') View All
+    .table-wrapper
+      table.admin-overview-table
+        thead
+          tr
+            th Name
+            th Type
+            th City
+            th Network
+        tbody#overview-facilities
+          tr
+            td(colspan='4')
+              .loader
+                .spinner
+                |  Loading...
+
+  .card
+    .card-title
+      span Recent Keys
+      a.btn.btn-sm.btn-ghost(href='/admin/keys') View All
+    .table-wrapper
+      table.admin-overview-table
+        thead
+          tr
+            th Facility
+            th Code
+            th Role
+            th Status
+        tbody#overview-keys
+          tr
+            td(colspan='4')
+              .loader
+                .spinner
+                |  Loading...
+
+block scripts
+  style.
+    /* ── Overview-specific table tweaks ── */
+    .admin-overview-table { table-layout: fixed; width: 100%; }
+    .admin-overview-table th:nth-child(1),
+    .admin-overview-table td:nth-child(1) { width: 40%; word-break: break-word; }
+    .admin-overview-table th:nth-child(2),
+    .admin-overview-table td:nth-child(2) { width: 16%; }
+    .admin-overview-table th:nth-child(3),
+    .admin-overview-table td:nth-child(3) { width: 20%; }
+    .admin-overview-table th:nth-child(4),
+    .admin-overview-table td:nth-child(4) { width: 24%; }
+    /* Keys table columns */
+    .admin-overview-table.keys-table th:nth-child(1),
+    .admin-overview-table.keys-table td:nth-child(1) { width: 38%; word-break: break-word; }
+    .admin-overview-table.keys-table th:nth-child(2),
+    .admin-overview-table.keys-table td:nth-child(2) { width: 22%; }
+    .admin-overview-table.keys-table th:nth-child(3),
+    .admin-overview-table.keys-table td:nth-child(3) { width: 20%; }
+    .admin-overview-table.keys-table th:nth-child(4),
+    .admin-overview-table.keys-table td:nth-child(4) { width: 20%; }
+
+    .facility-name-cell { font-weight: 600; line-height: 1.3; }
+    code.key-code {
+      display: inline-block;
+      background: #e8f0fe;
+      color: #0052CC;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+  script.
+    document.addEventListener('DOMContentLoaded', () => {
+
+      // Mark second table as keys-table
+      document.querySelectorAll('.admin-overview-table')[1]?.classList.add('keys-table');
+
+      Promise.all([
+        fetch('/api/facilities',    { credentials: 'include' }).then(r => r.json()),
+        fetch('/api/facility-keys', { credentials: 'include' }).then(r => r.json()),
+        fetch('/api/admin/users',   { credentials: 'include' }).then(r => r.json()).catch(() => ({ users: [] })),
+      ]).then(([fData, kData, uData]) => {
+
+        const facilities = fData.facilities || [];
+        const keys       = kData.keys       || [];
+        const users      = uData.users      || [];
+
+        const networkMembers = facilities.filter(f => f.isNetworkMember).length;
+        const activeKeys     = keys.filter(k => k.isActive).length;
+
+        countUp(document.getElementById('total-facilities'), facilities.length);
+        countUp(document.getElementById('active-keys'),      activeKeys);
+        countUp(document.getElementById('total-users'),      users.length);
+        countUp(document.getElementById('network-members'),  networkMembers);
+
+        // Recent facilities
+        const fTbody = document.getElementById('overview-facilities');
+        if (!facilities.length) {
+          fTbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>No facilities yet</p></div></td></tr>`;
+        } else {
+          fTbody.innerHTML = facilities.slice(0, 5).map(f => `
+            <tr>
+              <td class="facility-name-cell">${f.name}</td>
+              <td>${f.type}</td>
+              <td>${f.address ? f.address.city : '—'}</td>
+              <td><span class="badge ${f.isNetworkMember ? 'badge-ok' : 'badge-declined'}">${f.isNetworkMember ? 'Active' : 'Inactive'}</span></td>
+            </tr>
+          `).join('');
+        }
+
+        // Recent keys
+        const kTbody = document.getElementById('overview-keys');
+        if (!keys.length) {
+          kTbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><p>No keys yet</p></div></td></tr>`;
+        } else {
+          kTbody.innerHTML = keys.slice(0, 5).map(k => `
+            <tr>
+              <td class="facility-name-cell">${k.facility_id ? k.facility_id.name : '—'}</td>
+              <td><code class="key-code">${k.code}</code></td>
+              <td>${k.role.replace(/_/g,' ')}</td>
+              <td><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
+            </tr>
+          `).join('');
+        }
+      }).catch(err => console.error('Overview load error:', err));
+    });
