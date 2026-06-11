@@ -90,10 +90,20 @@ block scripts
 
       loadAlerts();
 
+      const showError = (msg) => {
+        const container = document.getElementById('alerts-container');
+        const el = document.createElement('div');
+        el.className = 'flash flash-error';
+        el.style.marginBottom = '1rem';
+        el.textContent = msg;
+        container.prepend(el);
+        setTimeout(() => el.remove(), 4000);
+      };
+
       const doAlert = async (id, action) => {
-        const body = action === 'dispatch' ? { notes: 'Drugs dispatched' }
-                   : action === 'self-resolve' ? { notes: 'Resolved externally' }
-                   : {};
+        const body = action === 'dispatch'     ? { notes: 'Drugs dispatched' }
+                  : action === 'self-resolve' ? { notes: 'Resolved externally' }
+                  : {};
         const res  = await fetch(`/api/alerts/${id}/${action}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -102,21 +112,64 @@ block scripts
         });
         const data = await res.json();
         if (res.ok) loadAlerts();
-        else alert(data.message || 'Action failed');
+        else showError(data.message || 'Action failed');
       };
 
-      window.resolveWithBatch = async (id) => {
-        const batch_number = prompt('Enter the batch number you added to inventory after receiving:');
-        if (!batch_number) return;
-        const res = await fetch(`/api/alerts/${id}/resolve`, {
+      window.resolveWithBatch = (id) => {
+        // Show in-app modal instead of prompt()
+        const modal = document.createElement('div');
+        modal.className = 'modal-backdrop';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+          <div class="modal-box" style="max-width:420px">
+            <div class="modal-header">
+              <h3>Confirm Receipt</h3>
+              <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+            </div>
+            <p style="font-size:0.875rem;color:#8492a6;margin-bottom:1rem">
+              Enter the batch number you added to your inventory after receiving the drugs.
+            </p>
+            <div class="form-group">
+              <label>Batch Number</label>
+              <input class="form-control" id="resolve-batch" placeholder="e.g LGH-BATCH001" />
+            </div>
+            <div id="resolve-result"></div>
+            <div class="modal-footer">
+              <button class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
+              <button class="btn btn-success" onclick="submitResolve('${id}', this)">✓ Mark Received</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+      };
+
+      window.submitResolve = async (id, btn) => {
+        const batch_number = document.getElementById('resolve-batch').value.trim();
+        const result       = document.getElementById('resolve-result');
+
+        if (!batch_number) {
+          result.innerHTML = '<div class="flash flash-error" style="margin-top:0.5rem">Batch number is required</div>';
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        const res  = await fetch(`/api/alerts/${id}/resolve`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ batch_number, notes: 'Drugs received' }),
         });
         const data = await res.json();
-        if (res.ok) loadAlerts();
-        else alert(data.message || 'Failed to resolve');
+
+        if (res.ok) {
+          document.querySelector('.modal-backdrop')?.remove();
+          loadAlerts();
+        } else {
+          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.5rem">${data.message || 'Failed to resolve'}</div>`;
+          btn.disabled = false;
+          btn.textContent = '✓ Mark Received';
+        }
       };
 
       // auto-refresh every 15 seconds

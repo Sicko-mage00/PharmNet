@@ -497,6 +497,15 @@ input, textarea, td, .profile-field-value {
   letter-spacing: 0.5px;
 }
 
+.card-title-actions {
+  display: flex; align-items: center;
+  flex-wrap: wrap; gap: 0.4rem;
+}
+
+/* ── Search wrapper in card title ───────────────────── */
+.search-wrapper { flex: 1; max-width: 260px; }
+.search-wrapper input { margin: 0; height: 34px; font-size: 0.82rem; }
+
 /* ── Stats ──────────────────────────────────────────── */
 .stats-grid {
   display: grid;
@@ -526,6 +535,12 @@ input, textarea, td, .profile-field-value {
 .stat-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-md);
+}
+
+a.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--primary);
 }
 
 .stat-icon {
@@ -788,6 +803,7 @@ tbody tr:hover td { background: var(--page-bg); }
   font-weight: 600;
 }
 
+
 .badge-pending    { background: #fff3cd; color: #856404; }
 .badge-confirmed  { background: #cce5ff; color: #004085; }
 .badge-dispatched { background: #d1ecf1; color: #0c5460; }
@@ -798,6 +814,50 @@ tbody tr:hover td { background: var(--page-bg); }
 .badge-ok         { background: #e6f9f0; color: #1a9e5c; }
 .badge-low        { background: #fee8e8; color: #d63031; }
 .badge-fefo       { background: #fef3e8; color: #e17055; }
+.badge-facility   { background: #e0f2fe; color: #0369a1; }
+
+/* ── Modal ──────────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,0.55);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 1rem;
+}
+
+.modal-box {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  width: 100%; max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  animation: fadeIn 0.2s ease both;
+}
+
+.modal-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.9rem;
+}
+
+.modal-header h3 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+
+.modal-close {
+  background: var(--page-bg); border: none;
+  font-size: 1rem; cursor: pointer;
+  color: var(--text-muted);
+  padding: 0.3rem 0.6rem; border-radius: 6px;
+}
+
+.modal-close:hover { background: var(--border); }
+
+.modal-footer {
+  display: flex; gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.2rem; padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
 
 /* ── Alert cards ────────────────────────────────────── */
 .alert-card {
@@ -811,6 +871,8 @@ tbody tr:hover td { background: var(--page-bg); }
   transition: all var(--transition);
   animation: fadeIn 0.3s ease both;
 }
+
+
 
 .alert-card:hover { box-shadow: var(--shadow-md); transform: translateX(2px); }
 .alert-card.ROP   { border-left-color: var(--danger);  }
@@ -1305,4 +1367,8 @@ tbody tr:hover td { background: var(--page-bg); }
 
   .topbar { height: 54px; }
   .topbar-title { font-size: 0.9rem; }
+
+  .card-title-actions { width: 100%; }
+  .card-title-actions .form-control { font-size: 0.75rem; }
+  .search-wrapper { max-width: 100%; }
 }

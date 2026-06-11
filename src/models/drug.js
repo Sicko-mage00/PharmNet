@@ -21,7 +21,7 @@ const drugSchema = new mongoose.Schema({
 
   drug_name:    { type: String, required: true, trim: true },
   generic_name: { type: String, trim: true },
-  barcode:      { type: String, unique: true, sparse: true, trim: true },
+  barcode:      { type: String, sparse: true, trim: true, index: true },
   unit:         { type: String, default: 'tablet' },
   category:     { type: String, trim: true },
 
@@ -46,6 +46,7 @@ const drugSchema = new mongoose.Schema({
 drugSchema.index({ facility_id: 1, drug_name: 1 });
 drugSchema.index({ facility_id: 1, total_quantity: 1 });
 drugSchema.index({ 'batches.expiry_date': 1 });
+drugSchema.index({ facility_id: 1, barcode: 1 }, { unique: true, sparse: true });
 
 // Sort batches FEFO + recalculate total on every save
 drugSchema.pre('save', function (next) {

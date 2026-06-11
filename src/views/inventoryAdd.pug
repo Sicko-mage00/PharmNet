@@ -60,46 +60,51 @@ block content
         .form-group
           label Unit Price (₦)
           input.form-control(type='number' id='unit_price' placeholder='e.g 150')
-
+    
+      #add-result
       button.btn.btn-primary(type='submit') Add Drug
+      
+#add-result
 
 block scripts
   script.
-
     document.getElementById('add-drug-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const result = document.getElementById('add-result');
+      result.innerHTML = '<div class="loader"><div class="spinner"></div> Adding drug...</div>';
+
+      const barcodeVal = document.getElementById('barcode').value.trim();
 
       const body = {
         drug_name:         document.getElementById('drug_name').value,
         generic_name:      document.getElementById('generic_name').value,
         category:          document.getElementById('category').value,
         unit:              document.getElementById('unit').value,
-        barcode:           document.getElementById('barcode').value,
+        barcode:           barcodeVal || undefined,
         reorder_point:     parseInt(document.getElementById('reorder_point').value),
-        expiry_alert_days: parseInt(document.getElementById('expiry_alert_days').value),
+        expiry_alert_days: parseInt(document.getElementById('expiry_alert_days').value) || 90,
         batch_number:      document.getElementById('batch_number').value,
         quantity:          parseInt(document.getElementById('quantity').value),
         expiry_date:       document.getElementById('expiry_date').value,
-        unit_price:        parseFloat(document.getElementById('unit_price').value),
+        unit_price:        parseFloat(document.getElementById('unit_price').value) || null,
       };
 
       try {
-        const res = await fetch('/api/inventory', {
+        const res  = await fetch('/api/inventory', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(body),
         });
         const data = await res.json();
 
         if (res.ok) {
-          window.location.href = '/inventory';
+          result.innerHTML = '<div class="flash flash-success">✓ Drug added — redirecting...</div>';
+          setTimeout(() => window.location.href = '/inventory', 800);
         } else {
-          alert(data.message || 'Failed to add drug');
+          result.innerHTML = `<div class="flash flash-error">${data.message || 'Failed to add drug'}</div>`;
         }
       } catch (err) {
-        alert('Something went wrong');
+        result.innerHTML = '<div class="flash flash-error">Something went wrong — try again</div>';
       }
     });

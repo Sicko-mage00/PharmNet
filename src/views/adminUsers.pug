@@ -158,6 +158,7 @@ block scripts
         .then(r => r.json())
         .then(data => {
           allUsers = data.users || [];
+          window._canAssignRoles = data.canAssignRoles;
           renderUsers(allUsers);
         })
         .catch(() => {
@@ -185,8 +186,9 @@ block scripts
         }
         tbody.innerHTML = users.map(u => {
           const fullName = toTitle(`${u.firstName} ${u.lastName}`);
-          const roleClass = u.role === 'super_admin' ? 'badge-ok'
-                          : u.role === 'facility_admin' ? 'badge-warning' : 'badge-pending';
+          const roleClass = u.role === 'super_admin'    ? 'badge-ok'
+                          : u.role === 'facility_admin' ? 'badge-facility'
+                          : 'badge-pending';
           return `
             <tr>
               <td class="name-cell" title="${fullName}">${fullName}</td>
@@ -199,10 +201,10 @@ block scripts
               }</td>
               <td style="font-size:0.8rem;color:#8492a6">${new Date(u.created_at).toLocaleDateString('en-NG')}</td>
               <td>
-                <button class="btn btn-sm btn-ghost"
-                  onclick="openRoleModal('${u._id}','${fullName.replace(/'/g,"\\'")}','${u.role||''}')">
-                  Role
-                </button>
+                ${window._canAssignRoles 
+                  ? `<button class="btn btn-sm btn-ghost" onclick="openRoleModal('${u._id}','${fullName.replace(/'/g,"\\'")}','${u.role||''}')">Role</button>`
+                  : '—'
+                }
               </td>
             </tr>`;
         }).join('');
@@ -224,7 +226,7 @@ block scripts
         const result = document.getElementById('role-result');
         const btn    = document.querySelector('#role-modal .btn-primary');
         btn.disabled = true; btn.textContent = 'Saving...';
-        result.innerHTML = '';
+        result.innerHTML = `<div class="flash flash-error"...>${data.message}</div>`;
 
         try {
           const res = await fetch(`/api/admin/users/${id}/role`, {

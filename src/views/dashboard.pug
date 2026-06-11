@@ -2,23 +2,37 @@ extends layout
 
 block content
   .stats-grid
-    .stat-card
-      .stat-icon.blue 💊
+    a.stat-card(href='/inventory' style='text-decoration:none;cursor:pointer')
+      .stat-icon.blue
+        svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='22' height='22')
+          path(d='M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z')
       .stat-info
         .stat-number#total-drugs 0
         .stat-label Total Drugs
-    .stat-card
-      .stat-icon.red 📉
+
+    a.stat-card(href='/inventory' style='text-decoration:none;cursor:pointer')
+      .stat-icon.red
+        svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='22' height='22')
+          polyline(points='22 12 18 12 15 21 9 3 6 12 2 12')
       .stat-info
         .stat-number#low-stock 0
         .stat-label Low Stock
-    .stat-card
-      .stat-icon.orange ⏳
+
+    a.stat-card(href='/inventory' style='text-decoration:none;cursor:pointer')
+      .stat-icon.orange
+        svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='22' height='22')
+          circle(cx='12' cy='12' r='10')
+          polyline(points='12 6 12 12 16 14')
       .stat-info
         .stat-number#expiring 0
         .stat-label Expiring Soon
-    .stat-card
-      .stat-icon.green 🛒
+
+    a.stat-card(href='/sales' style='text-decoration:none;cursor:pointer')
+      .stat-icon.green
+        svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='22' height='22')
+          circle(cx='9' cy='21' r='1')
+          circle(cx='20' cy='21' r='1')
+          path(d='M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 001.95-1.57L23 6H6')
       .stat-info
         .stat-number#total-sales 0
         .stat-label Sales Today
