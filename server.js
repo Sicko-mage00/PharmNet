@@ -39,14 +39,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(join(__dirname, 'src/public')));
 app.use(session({
-  secret: process.env.SESSION_SECRET, // Secure key
+  secret: process.env.SESSION_SECRET || 'fallback-secret-key-for-dev', // <-- Add this line
   resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  },
+  saveUninitialized: true
 }));
 
 
