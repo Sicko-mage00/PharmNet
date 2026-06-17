@@ -234,10 +234,9 @@ input, textarea, td, .profile-field-value {
 .topbar-facility-name { font-size: 0.72rem; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
 .topbar-alert-btn { position: relative; display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 8px; color: var(--text-muted); text-decoration: none; transition: background 0.15s, color 0.15s; }
 .topbar-alert-btn:hover { background: var(--page-bg); color: var(--text); }
-.topbar-alert-btn.has-alerts { color: var(--danger); }
-.topbar-alert-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background: var(--danger); border-radius: 50%; border: 2px solid white; display: none; }
+.topbar-alert-btn.has-alerts { color: var(--text); }
+.topbar-alert-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; background: #000000; border-radius: 50%; border: 2px solid white; display: none; }
 .topbar-alert-dot.visible { display: block; }
-.topbar-alert-dot.pulse { animation: alertPulse 1.5s ease-in-out infinite; }
 @keyframes alertPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.7; } }
 .sidebar-toggle { display: none; background: none; border: none; cursor: pointer; color: var(--text); padding: 0.4rem; border-radius: 6px; transition: background var(--transition); }
 .sidebar-toggle:hover { background: var(--page-bg); }
@@ -386,104 +385,106 @@ tbody tr:hover td { background: var(--page-bg); }
 
 /* ─── 6. ALERTS (MESSAGING UI) ──────────────────────────── */
 #alerts-container {
-  max-width: 680px; /* Constrains width to mimic a phone chat feed */
-  margin: 0 auto;
+  max-width: 100%; 
+  margin: 0;
 }
+
 .alert-accordion {
-  background: #ffffff;
-  border-bottom: 1px solid #edf2f7;
-  margin-bottom: 0;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border); /* Default left border */
+  border-radius: var(--radius); 
+  margin-bottom: 1.5rem; 
+  box-shadow: var(--shadow-sm); 
   overflow: hidden;
-  transition: background 0.2s ease;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
-.alert-accordion:first-child {
-  border-top: 1px solid #edf2f7;
-  border-radius: 8px 8px 0 0;
-}
-.alert-accordion:last-child {
-  border-radius: 0 0 8px 8px;
-}
+
+/* Color-coded left borders */
+.alert-accordion.type-ROP { border-left-color: var(--danger); }
+.alert-accordion.type-FEFO { border-left-color: var(--warning); }
+.alert-accordion.type-Transfer { border-left-color: var(--primary); }
+
 .alert-accordion:hover { 
-  background: #f8fafc; 
+  box-shadow: var(--shadow-md); 
 }
+
+/* Header is slightly grey, body is pure white for contrast */
 .alert-header {
-  padding: 14px 16px;
+  background: #f8fafc; 
+  padding: 1.25rem 1.5rem; 
   cursor: pointer;
-  user-select: none; /* Fixes the blue highlight double-click bug */
+  user-select: none;
   -webkit-user-select: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-.alert-header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.drug-name {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #1a202c;
-}
-.alert-date {
-  font-size: 0.75rem;
-  color: #a0aec0;
-  font-weight: 500;
-}
-.alert-header-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.alert-preview {
-  font-size: 0.85rem;
-  color: #718096;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis; /* Adds the "..." on small mobile screens */
-  max-width: 65%;
-}
-.alert-badges {
-  display: flex;
   gap: 6px;
-  align-items: center;
 }
+
+.alert-header-top {
+  display: flex; justify-content: space-between; align-items: center;
+}
+
+.drug-name { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.alert-date { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+
+.alert-header-bottom {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+}
+
+.alert-preview {
+  font-size: 0.9rem; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
+}
+
+.alert-badges {
+  display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+}
+
+/* Subscript tags (Smaller than the status badge) */
 .badge-pill {
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 0.65rem;
+  font-size: 0.65rem; /* Smaller size */
   font-weight: 700;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
-/* Custom Colors for the Subscripts */
+
 .badge-rop-pill { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
 .badge-fefo-pill { background: #ffedd5; color: #ea580c; border: 1px solid #fed7aa; }
 
 .alert-body {
-  padding: 0 16px;
+  padding: 0 1.5rem;
   max-height: 0;
   overflow: hidden;
-  background: #fafbff;
+  background: #ffffff; /* Pure white body */
   transition: max-height 0.3s ease-out, padding 0.3s ease;
 }
+
 .alert-accordion.expanded .alert-body {
-  padding: 16px;
+  padding: 1.5rem; 
   max-height: 600px;
-  border-bottom: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border);
 }
+
+/* Fixed Mobile Grid */
 .alert-details-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
+
 .detail-item {
-  display: flex;
-  align-items: center;
-  font-size: 0.9rem;
-  color: #4a5568;
+  display: flex; align-items: center;
+  font-size: 0.9rem; color: var(--text);
+  word-break: break-word;
 }
-.detail-icon { margin-right: 8px; color: #a0aec0; }
+
+.detail-icon { margin-right: 8px; color: var(--text-muted); flex-shrink: 0; }
+
 .priority-match-card {
   border-left: 4px solid var(--warning);
   background: #fffaf0;
@@ -578,6 +579,11 @@ tbody tr:hover td { background: var(--page-bg); }
 
   .page-header { flex-wrap: wrap; gap: 0.75rem; }
   .page-header .btn { width: 100%; justify-content: center; }
+
+  .alert-details-grid {
+    grid-template-columns: 1fr; /* Forces stacking on mobile so it doesn't break */
+    gap: 10px;
+  }
 }
 
 /* SMALL MOBILE — max-width: 480px */

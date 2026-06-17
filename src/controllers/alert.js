@@ -9,10 +9,10 @@ import { getCategorizedMatches } from '../services/matcher.js';
 
 const alertController = {
 
-  // ─── GET ALL ALERTS ────────────────────────────────────
+  // ─── GET ALL ALERTS (THE DUAL-FETCH ENGINE) ────────────
   getAlerts: async (req, res) => {
     try {
-
+      // 1. Fetch Internal Alerts (ROP / FEFO)
       const alerts = await Alert.find({
         $or: [
           { target_facility: req.user.facility_id },
@@ -23,375 +23,278 @@ const alertController = {
         .populate('drug_id', 'drug_name unit')
         .populate('source_facility', 'name location')
         .populate('target_facility', 'name location')
-        .sort({ created_at: -1 });
+        .lean(); // .lean() makes it a standard JSON object so we can combine arrays
 
-      res.status(200).json({ status: 'success', count: alerts.length, alerts });
+      // 2. Fetch Network Transfers
+      const transfers = await Transfer.find({
+        $or: [
+          { requesterFacility: req.user.facility_id },
+          { providerFacility: req.user.facility_id }
+        ],
+        status: { $nin: ['Draft', 'Reverted', 'Completed'] }
+      })
+        .populate('drugId', 'drug_name unit')
+        .populate('requesterFacility', 'name location')
+        .populate('providerFacility', 'name location')
+        .lean();
+
+      // 3. Disguise Transfers as Standard Alerts for the UI
+      const mappedTransfers = transfers.map(t => {
+        let mappedStatus = 'pending';
+        if (t.status === 'Pending Approval') mappedStatus = 'pending';
+        if (t.status === 'Accepted')         mappedStatus = 'confirmed';
+        if (t.status === 'Dispatched')       mappedStatus = 'dispatched';
+
+        return {
+          _id: t._id,
+          isTransfer: true, // Hidden flag for internal routing
+          type: t.transactionType === 'Discounted Offload' ? 'FEFO' : 'ROP', // Keeps UI colors
+          drug_name: t.drugId ? t.drugId.drug_name : 'Network Drug',
+          source_facility: t.providerFacility, // Provider = Source
+          target_facility: t.requesterFacility, // Requester = Target
+          quantity_needed: t.quantityRequested,
+          quantity_available: t.quantityRequested,
+          status: mappedStatus,
+          notes: `Network Transfer: ${t.transactionType} (${t.quantityRequested} ${t.unit})`,
+          created_at: t.createdAt || t.updatedAt
+        };
+      });
+
+      // 4. Merge the lists and sort chronologically
+      const combinedFeed = [...alerts, ...mappedTransfers].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+      res.status(200).json({ status: 'success', count: combinedFeed.length, alerts: combinedFeed });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── FETCH NETWORK MATCHES (The Categorization API) ──────
-  // GET /api/alerts/network-matches?drugName=Amoxicillin&type=ROP
+  // ─── FETCH NETWORK MATCHES ─────────────────────────────
   getNetworkMatches: async (req, res) => {
     try {
       const { drugName, type } = req.query;
 
       if (!drugName || !type) {
-        return res.status(400).json({ 
-          message: 'Policy Error: Drug name and alert type are required to query the network.' 
-        });
+        return res.status(400).json({ message: 'Policy Error: Drug name and alert type are required.' });
       }
 
-      // 1. Fetch the full facility details of the user making the request
       const requesterFacility = await Facility.findById(req.user.facility_id);
-      
-      if (!requesterFacility) {
-        return res.status(404).json({ message: 'Requesting facility profile not found.' });
-      }
+      if (!requesterFacility) return res.status(404).json({ message: 'Facility not found.' });
 
-      // 2. Feed the data into the categorization engine
       const matches = await getCategorizedMatches(requesterFacility, drugName, type);
 
-      // 3. Return the perfectly sorted payload to the frontend
-      res.status(200).json({
-        status: 'success',
-        data: matches
-      });
-      
-    } catch (err) {
-      console.error('[getNetworkMatches] Error:', err);
-      res.status(500).json({ message: 'Server error while mapping network', error: err.message });
-    }
-  },
-
-  // ─── CONFIRM ALERT ─────────────────────────────────────
-  // called by SOURCE facility — first to confirm wins
-  confirmAlert: async (req, res) => {
-    try {
-      const alert = await Alert.findOne({
-        _id:             req.params.id,
-        source_facility: req.user.facility_id,
-        status:          'pending',
-      });
-
-      if (!alert) {
-        return res.status(404).json({ message: 'Alert not found or already taken' });
-      }
-
-      // confirm this one
-      alert.status = 'confirmed';
-      await alert.save();
-
-      // cancel all other pending alerts for same drug + target
-      await Alert.updateMany(
-        {
-          _id:             { $ne: alert._id },
-          drug_id:         alert.drug_id,
-          target_facility: alert.target_facility,
-          type:            alert.type,
-          status:          'pending',
-        },
-        {
-          status: 'cancelled',
-          notes:  'Request fulfilled by another facility',
-        }
-      );
-
-      // notify target — match confirmed
-      emitAlert(alert, true);
-
-      // notify other sources — request fulfilled
-      const io = getIO();
-      const cancelledAlerts = await Alert.find({
-        drug_id:         alert.drug_id,
-        target_facility: alert.target_facility,
-        type:            alert.type,
-        status:          'cancelled',
-      });
-
-      for (const cancelled of cancelledAlerts) {
-        io.to(cancelled.source_facility.toString()).emit('alert_cancelled', {
-          message: `Request for ${alert.drug_name} has been fulfilled by another facility`,
-          alert:   cancelled,
-        });
-      }
-
-      res.status(200).json({
-        status:  'success',
-        message: 'Match confirmed — arrange transfer',
-        alert,
-      });
-
+      res.status(200).json({ status: 'success', data: matches });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── DECLINE ALERT ─────────────────────────────────────
-  // called by SOURCE facility — they explicitly refuse
+  // ─── CONFIRM ALERT / TRANSFER ──────────────────────────
+  confirmAlert: async (req, res) => {
+    try {
+      // Try Internal Alert
+      let alert = await Alert.findOne({ _id: req.params.id, source_facility: req.user.facility_id, status: 'pending' });
+      
+      if (alert) {
+        alert.status = 'confirmed';
+        await alert.save();
+        return res.status(200).json({ status: 'success', message: 'Internal Match confirmed', alert });
+      }
+
+      // Try Network Transfer (The "Catch")
+      let transfer = await Transfer.findOne({ _id: req.params.id, providerFacility: req.user.facility_id, status: 'Pending Approval' });
+      
+      if (!transfer) return res.status(404).json({ message: 'Request not found or already processed' });
+
+      transfer.status = 'Accepted';
+      await transfer.save();
+
+      const io = getIO();
+      io.to(transfer.requesterFacility.toString()).emit('transfer_accepted', {
+        message: `Your request was accepted by the provider!`,
+        transfer
+      });
+
+      return res.status(200).json({ status: 'success', message: 'Network Transfer accepted — arrange dispatch' });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  // ─── DECLINE ALERT / TRANSFER ──────────────────────────
   declineAlert: async (req, res) => {
     try {
-      const alert = await Alert.findOneAndUpdate(
-        {
-          _id:             req.params.id,
-          source_facility: req.user.facility_id,
-          status:          'pending',
-        },
-        {
-          status: 'declined',
-          notes:  req.body.notes || 'Source facility declined',
-        },
+      let alert = await Alert.findOneAndUpdate(
+        { _id: req.params.id, source_facility: req.user.facility_id, status: 'pending' },
+        { status: 'declined', notes: 'Source facility declined' },
         { returnDocument: 'after' }
       );
 
-      if (!alert) {
-        return res.status(404).json({ message: 'Alert not found' });
-      }
+      if (alert) return res.status(200).json({ status: 'success', message: 'Internal Alert declined', alert });
 
-      // notify target — this source declined, others still pending
-      const io = getIO();
-      io.to(alert.target_facility.toString()).emit('alert_declined', {
-        message: `A facility declined your ${alert.drug_name} request — others still pending`,
-        alert,
-      });
+      let transfer = await Transfer.findOneAndUpdate(
+        { _id: req.params.id, providerFacility: req.user.facility_id, status: 'Pending Approval' },
+        { status: 'Reverted' },
+        { returnDocument: 'after' }
+      );
 
-      res.status(200).json({ status: 'success', message: 'Alert declined', alert });
+      if (!transfer) return res.status(404).json({ message: 'Request not found' });
+
+      return res.status(200).json({ status: 'success', message: 'Network Transfer declined' });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── SELF RESOLVE ──────────────────────────────────────
-  // called by TARGET facility — handled externally
+  // ─── SELF RESOLVE (Internal Only) ──────────────────────
   selfResolve: async (req, res) => {
     try {
       const alert = await Alert.findOneAndUpdate(
-        {
-          _id:             req.params.id,
-          target_facility: req.user.facility_id,
-          status:          { $in: ['pending', 'confirmed'] },
-        },
-        {
-          status:      'self_resolved',
-          resolved_at: new Date(),
-          notes:       req.body.notes || 'Resolved externally',
-        },
+        { _id: req.params.id, target_facility: req.user.facility_id, status: { $in: ['pending', 'confirmed'] } },
+        { status: 'self_resolved', resolved_at: new Date(), notes: 'Resolved externally' },
         { returnDocument: 'after' }
       );
-
-      if (!alert) {
-        return res.status(404).json({ message: 'Alert not found' });
-      }
-
-      // cancel all other pending alerts for this drug + facility
-      await Alert.updateMany(
-        {
-          _id:             { $ne: alert._id },
-          drug_id:         alert.drug_id,
-          target_facility: req.user.facility_id,
-          status:          'pending',
-        },
-        {
-          status: 'cancelled',
-          notes:  'Request self-resolved by facility',
-        }
-      );
-
-      res.status(200).json({
-        status:  'success',
-        message: 'Alert self-resolved',
-        alert,
-      });
+      if (!alert) return res.status(404).json({ message: 'Alert not found' });
+      res.status(200).json({ status: 'success', message: 'Alert self-resolved', alert });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── DISPATCH ALERT ────────────────────────────────────
-  // PATCH /api/alerts/:id/dispatch
-  // called by SOURCE facility — they have sent the drugs
+  // ─── DISPATCH ALERT / TRANSFER ─────────────────────────
   dispatchAlert: async (req, res) => {
     try {
-      const alert = await Alert.findOne({
-        _id:             req.params.id,
-        source_facility: req.user.facility_id,
-        status:          'confirmed',
-      });
-
-      if (!alert) {
-        return res.status(404).json({ message: 'Alert not found or not yet confirmed' });
+      let alert = await Alert.findOne({ _id: req.params.id, source_facility: req.user.facility_id, status: 'confirmed' });
+      
+      if (alert) {
+        alert.status = 'dispatched';
+        alert.dispatched_at = new Date();
+        await alert.save();
+        return res.status(200).json({ status: 'success', message: 'Internal Drugs dispatched', alert });
       }
 
-      // set both status and dispatched_at
-      alert.status        = 'dispatched';
-      alert.dispatched_at = new Date();
-      alert.notes         = req.body.notes || 'Drugs dispatched';
-      await alert.save();
+      let transfer = await Transfer.findOne({ _id: req.params.id, providerFacility: req.user.facility_id, status: 'Accepted' });
+      if (!transfer) return res.status(404).json({ message: 'Transfer not found' });
 
-      // notify target — drugs are on the way
-      const io = getIO();
-      io.to(alert.target_facility.toString()).emit('drugs_dispatched', {
-        message: `${alert.drug_name} has been dispatched by source facility`,
-        alert,
-      });
+      transfer.status = 'Dispatched';
+      await transfer.save();
 
-      res.status(200).json({
-        status:  'success',
-        message: 'Drugs marked as dispatched',
-        alert,
-      });
+      return res.status(200).json({ status: 'success', message: 'Network Drugs marked as dispatched' });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
-  // ─── RESOLVE ALERT ─────────────────────────────────────
-  // PATCH /api/alerts/:id/resolve
-  // called by TARGET facility only — they confirmed receipt
+
+  // ─── RESOLVE ALERT / TRANSFER (INVENTORY MATH ENGINE) ──
   resolveAlert: async (req, res) => {
     try {
-      const alert = await Alert.findOneAndUpdate(
-        {
-          _id:             req.params.id,
-          target_facility: req.user.facility_id, // only target can resolve
-          status:          'dispatched',          // must be dispatched first
-        },
-        {
-          status:      'resolved',
-          resolved_at: new Date(),
-          notes:       req.body.notes || 'Drugs received',
-        },
+      let alert = await Alert.findOneAndUpdate(
+        { _id: req.params.id, target_facility: req.user.facility_id, status: 'dispatched' },
+        { status: 'resolved', resolved_at: new Date(), notes: 'Drugs received' },
         { returnDocument: 'after' }
       );
 
-      if (!alert) {
-        return res.status(404).json({ message: 'Alert not found or not yet dispatched' });
+      if (alert) return res.status(200).json({ status: 'success', message: 'Internal Transfer complete', alert });
+
+      let transfer = await Transfer.findOne({ _id: req.params.id, requesterFacility: req.user.facility_id, status: 'Dispatched' });
+      if (!transfer) return res.status(404).json({ message: 'Transfer not found' });
+
+      // ── THE INVENTORY MATH ──
+      const providerDrug = await Drug.findById(transfer.drugId);
+      
+      if (providerDrug) {
+          // 1. Deduct from Provider
+          providerDrug.total_quantity -= transfer.quantityRequested;
+          await providerDrug.save();
+
+          // 2. Add to Requester (Target)
+          let requesterDrug = await Drug.findOne({ drug_name: providerDrug.drug_name, facility_id: transfer.requesterFacility });
+          const newBatch = {
+              batch_number: req.body.batch_number || `NET-${Date.now()}`,
+              quantity: transfer.quantityRequested,
+              expiry_date: providerDrug.batches.length > 0 ? providerDrug.batches[0].expiry_date : new Date(Date.now() + 31536000000)
+          };
+
+          if (requesterDrug) {
+              requesterDrug.total_quantity += transfer.quantityRequested;
+              requesterDrug.batches.push(newBatch);
+              await requesterDrug.save();
+          } else {
+              // Automatically provision a new drug record if the facility has never stocked it before
+              requesterDrug = new Drug({
+                  facility_id: transfer.requesterFacility,
+                  drug_name: providerDrug.drug_name,
+                  category: providerDrug.category,
+                  unit: transfer.unit,
+                  total_quantity: transfer.quantityRequested,
+                  reorder_point: 50,
+                  selling_price: providerDrug.selling_price,
+                  batches: [newBatch]
+              });
+              await requesterDrug.save();
+          }
       }
 
-      res.status(200).json({
-        status:  'success',
-        message: 'Transfer complete — drugs received',
-        alert,
-      });
+      transfer.status = 'Completed';
+      await transfer.save();
+
+      return res.status(200).json({ status: 'success', message: 'Transfer complete — Inventory updated automatically!' });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── 1. CREATE DRAFT TRANSFER (The OPay Preview) ──────────
-  // POST /api/alerts/transfer/draft
-  // Called when Facility A clicks "Request Drug". It saves to the DB but notifies NOBODY yet.
+  // ─── OPAY-STYLE TRANSFER INITIATION ────────────────────
   createDraftTransfer: async (req, res) => {
     try {
       const { providerFacilityId, drugId, quantityRequested, unit, transactionType } = req.body;
-
       const draft = new Transfer({
         requesterFacility: req.user.facility_id,
         providerFacility: providerFacilityId,
         drugId: drugId,
-        transactionType: transactionType, // 'Discounted Offload' or 'Standard Requisition'
+        transactionType: transactionType,
         quantityRequested: quantityRequested,
-        unit: unit, // 'Carton', 'Pack', 'Card', etc.
+        unit: unit,
         status: 'Draft'
       });
-
       await draft.save();
-
-      res.status(201).json({
-        status: 'success',
-        message: 'Draft created. Proceed to confirmation screen.',
-        draft
-      });
+      res.status(201).json({ status: 'success', draft });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── 2. TRANSMIT TRANSFER (The OPay "Confirm" Button) ─────
-  // PATCH /api/alerts/transfer/:id/transmit
-  // Called when Facility A hits "Confirm & Transmit". Starts the clock and alerts Facility B.
   transmitTransfer: async (req, res) => {
     try {
-      const draft = await Transfer.findOne({
-        _id: req.params.id,
-        requesterFacility: req.user.facility_id,
-        status: 'Draft'
-      }).populate('drugId', 'drug_name');
+      const draft = await Transfer.findOne({ _id: req.params.id, requesterFacility: req.user.facility_id, status: 'Draft' }).populate('drugId', 'drug_name');
+      if (!draft) return res.status(404).json({ message: 'Draft not found' });
 
-      if (!draft) {
-        return res.status(404).json({ message: 'Draft not found or already transmitted' });
-      }
-
-      // Set status and start the 24-hour Revert Window
       draft.status = 'Pending Approval';
       const revertWindow = new Date();
       revertWindow.setHours(revertWindow.getHours() + 24); 
       draft.revertWindowEndsAt = revertWindow;
-
       await draft.save();
 
-      // NOW we notify Facility B that a request has officially arrived
-      const io = getIO();
-      io.to(draft.providerFacility.toString()).emit('new_transfer_request', {
-        message: `New request: ${draft.quantityRequested} ${draft.unit} of ${draft.drugId.drug_name}`,
-        transfer: draft
-      });
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Request officially transmitted to providing facility.',
-        transfer: draft
-      });
+      return res.status(200).json({ status: 'success', transfer: draft });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── 3. REVERT TRANSFER (The 24-Hour Grace Period) ────────
-  // PATCH /api/alerts/transfer/:id/revert
-  // Can be called by EITHER facility, but ONLY if the revert window hasn't expired.
   revertTransfer: async (req, res) => {
     try {
       const transfer = await Transfer.findOne({
         _id: req.params.id,
-        $or: [
-          { requesterFacility: req.user.facility_id },
-          { providerFacility: req.user.facility_id }
-        ],
+        $or: [{ requesterFacility: req.user.facility_id }, { providerFacility: req.user.facility_id }],
         status: { $in: ['Pending Approval', 'Accepted'] }
       });
 
-      if (!transfer) {
-        return res.status(404).json({ message: 'Transfer not found or cannot be reverted' });
-      }
-
-      // Check if the timer has run out
-      const now = new Date();
-      if (now > transfer.revertWindowEndsAt) {
-        return res.status(403).json({ 
-          message: 'Policy Error: The 24-hour revert window has already expired. Logistics are locked.' 
-        });
-      }
+      if (!transfer) return res.status(404).json({ message: 'Transfer not found' });
+      if (new Date() > transfer.revertWindowEndsAt) return res.status(403).json({ message: 'Policy Error: Grace period expired.' });
 
       transfer.status = 'Reverted';
       await transfer.save();
-
-      // Notify the other party that the deal was cancelled
-      const targetRoom = transfer.requesterFacility.toString() === req.user.facility_id.toString() 
-        ? transfer.providerFacility.toString() 
-        : transfer.requesterFacility.toString();
-
-      const io = getIO();
-      io.to(targetRoom).emit('transfer_reverted', {
-        message: 'A drug transfer was reverted within the grace period.',
-        transfer
-      });
-
-      res.status(200).json({
-        status: 'success',
-        message: 'Transfer successfully reverted.',
-        transfer
-      });
+      return res.status(200).json({ status: 'success', transfer });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }

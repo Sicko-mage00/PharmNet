@@ -32,10 +32,9 @@ block scripts
       const formatCompactDate = (dateString) => {
         if (!dateString) return '—';
         const d = new Date(dateString);
-        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(d); // e.g., 15 Jun
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(d); 
       };
 
-      // ─── ADD THIS FUNCTION BACK ───
       const formatStrictDate = (dateString) => {
         if (!dateString) return '—';
         const d = new Date(dateString);
@@ -44,18 +43,15 @@ block scripts
 
       // ─── ACCORDION TOGGLE LOGIC ──────────────────────────────
       window.toggleAccordion = (element, event) => {
-        event.stopPropagation(); // Prevents the global click listener from immediately closing it
+        event.stopPropagation(); 
         const accordion = element.closest('.alert-accordion');
         const wasExpanded = accordion.classList.contains('expanded');
         
-        // Close all other open accordions first
         document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
         
-        // Open this one if it wasn't already open
         if (!wasExpanded) accordion.classList.add('expanded');
       };
 
-      // Global listener to slide back in if clicking outside
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.alert-accordion')) {
           document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
@@ -79,59 +75,82 @@ block scripts
             }
 
             container.innerHTML = alerts.map(a => {
-              const myFacilityId  = user && user.facilityId;
-              const sourceFacId   = a.source_facility && a.source_facility._id;
-              const targetFacId   = a.target_facility && a.target_facility._id;
-              const isSource      = sourceFacId === myFacilityId;
-              const isTarget      = targetFacId === myFacilityId;
-              const isSelfAlert   = sourceFacId === targetFacId;
+              const myFacStr    = user && user.facilityId ? String(user.facilityId) : '';
+              const sourceStr   = a.source_facility && a.source_facility._id ? String(a.source_facility._id) : '';
+              const targetStr   = a.target_facility && a.target_facility._id ? String(a.target_facility._id) : '';
+              
+              // THE BUG FIX: Forces internal alerts to strictly follow internal UI logic
+              const isSelfAlert = !a.isTransfer; 
+              
+              const isSource    = sourceStr === myFacStr;
+              const isTarget    = targetStr === myFacStr;
 
               let actions = '';
               let previewText = '';
+              let detailsHtml = '';
 
-              // Dynamic SMS-Style Preview Generator
+              // ─── DYNAMIC PREVIEW & DETAILS LOGIC ───
               if (isSelfAlert) {
-                  previewText = a.type === 'ROP' 
-                      ? `Low stock: Only ${a.quantity_available} left — Need ${a.quantity_needed}` 
-                      : `Expiration warning — ${a.quantity_available} units expiring`;
-              } else {
-                  if (a.status === 'pending' && isSource) previewText = `Transfer request from ${a.target_facility?.name || 'facility'}`;
-                  else if (a.status === 'pending' && isTarget) previewText = `Incoming discount offer from ${a.source_facility?.name || 'facility'}`;
-                  else if (a.status === 'confirmed') previewText = `Match confirmed — awaiting dispatch`;
-                  else if (a.status === 'dispatched') previewText = `Drugs dispatched — awaiting receipt`;
-                  else previewText = a.notes || 'Status updated';
-              }
-
-              // Action Buttons
-              if (a.status === 'pending' && isSource && !isSelfAlert) {
-                actions += `<button class="btn btn-success btn-sm" onclick="doAlert('${a._id}','confirm')">${icons.check} Confirm</button>`;
-                actions += `<button class="btn btn-danger btn-sm" onclick="doAlert('${a._id}','decline')">${icons.cross} Decline</button>`;
-              }
-              if (a.status === 'confirmed' && isSource) {
-                actions += `<button class="btn btn-primary btn-sm" onclick="doAlert('${a._id}','dispatch')">${icons.box} Mark Dispatched</button>`;
-              }
-              if (a.status === 'dispatched' && isTarget) {
-                actions += `<button class="btn btn-success btn-sm" onclick="resolveWithBatch('${a._id}')">${icons.check} Mark Received</button>`;
-              }
-              
-              if (a.status === 'pending' && isSelfAlert) {
+                  // INTERNAL DSS ALERT (ROP/FEFO)
                   if (a.type === 'ROP') {
-                      actions += `<button class="btn btn-primary btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_needed}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
-                  } else if (a.type === 'FEFO') {
-                      actions += `<button class="btn btn-warning btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_available}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
+                      previewText = `Low Stock — Only ${a.quantity_available || 0} left`;
+                      detailsHtml += `<div class="detail-item">${icons.box} <strong>Your Stock:</strong>&nbsp;${a.quantity_available || 0} units</div>`;
+                      detailsHtml += `<div class="detail-item">${icons.trendDown} <strong>Suggested Reorder:</strong>&nbsp;${a.quantity_needed} units</div>`;
+                      
+                      // THE REQUEST BUTTON IS HERE!
+                      if (a.status === 'pending') {
+                          actions += `<button class="btn btn-primary btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_needed}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
+                          actions += `<button class="btn btn-ghost btn-sm" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
+                      }
+                  } else {
+                      previewText = `Expiring — ${a.quantity_available || 0} units expiring soon`;
+                      detailsHtml += `<div class="detail-item">${icons.box} <strong>Expiring Stock:</strong>&nbsp;${a.quantity_available || 0} units</div>`;
+                      detailsHtml += `<div class="detail-item">${icons.calendar} <strong>Expiry Date:</strong>&nbsp;${formatStrictDate(a.expiry_date)}</div>`;
+                      
+                      if (a.batch_number) {
+                          detailsHtml += `<div class="detail-item"><strong>Batch No:</strong>&nbsp;${a.batch_number}</div>`;
+                      }
+                      
+                      if (a.status === 'pending') {
+                          actions += `<button class="btn btn-warning btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_available}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
+                          actions += `<button class="btn btn-ghost btn-sm" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
+                      }
+                  }
+              } else {
+                  // NETWORK TRANSFER BETWEEN FACILITIES
+                  if (a.status === 'pending') {
+                      previewText = isSource ? `Transfer request from ${a.target_facility?.name}` : `Awaiting response from ${a.source_facility?.name}`;
+                  } else if (a.status === 'confirmed') {
+                      previewText = `Transfer agreed — awaiting dispatch`;
+                  } else if (a.status === 'dispatched') {
+                      previewText = `Drugs dispatched — awaiting receipt`;
+                  } else {
+                      previewText = a.notes || 'Status updated';
+                  }
+
+                  detailsHtml += `<div class="detail-item"><strong>Transfer Path:</strong>&nbsp;${a.source_facility ? a.source_facility.name : '—'} &nbsp;→&nbsp; ${a.target_facility ? a.target_facility.name : '—'}</div>`;
+                  detailsHtml += `<div class="detail-item">${icons.box} <strong>Quantity Agreed:</strong>&nbsp;${a.quantity_needed || a.quantity_available} units</div>`;
+
+                  if (a.status === 'pending' && isSource) {
+                      actions += `<button class="btn btn-success btn-sm" onclick="doAlert('${a._id}','confirm')">${icons.check} Accept Transfer</button>`;
+                      actions += `<button class="btn btn-danger btn-sm" onclick="doAlert('${a._id}','decline')">${icons.cross} Decline</button>`;
+                  }
+                  if (a.status === 'confirmed' && isSource) {
+                      actions += `<button class="btn btn-primary btn-sm" onclick="doAlert('${a._id}','dispatch')">${icons.box} Mark Dispatched</button>`;
+                  }
+                  if (a.status === 'dispatched' && isTarget) {
+                      actions += `<button class="btn btn-success btn-sm" onclick="resolveWithBatch('${a._id}')">${icons.check} Confirm Receipt (Update Inventory)</button>`;
                   }
               }
 
-              if (['pending', 'confirmed'].includes(a.status) && isTarget) {
-                actions += `<button class="btn btn-ghost btn-sm" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
-              }
-
-              const pillBadge = a.type === 'ROP' 
-                ? `<span class="badge-pill badge-rop-pill">ROP</span>` 
-                : `<span class="badge-pill badge-fefo-pill">FEFO</span>`;
+              // Determine styling class
+              const borderClass = a.isTransfer ? 'type-Transfer' : `type-${a.type}`;
+              const pillBadge = a.isTransfer 
+                ? `<span class="badge-pill" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">TRANSFER</span>` 
+                : (a.type === 'ROP' ? `<span class="badge-pill badge-rop-pill">ROP</span>` : `<span class="badge-pill badge-fefo-pill">FEFO</span>`);
 
               return `
-                <div class="alert-accordion">
+                <div class="alert-accordion ${borderClass}">
                   <div class="alert-header" onclick="toggleAccordion(this, event)">
                     <div class="alert-header-top">
                       <span class="drug-name">${a.drug_name || '—'}</span>
@@ -148,13 +167,10 @@ block scripts
                   
                   <div class="alert-body">
                     <div class="alert-details-grid">
-                        ${!isSelfAlert ? `<div class="detail-item"><strong>Route:</strong>&nbsp;${a.source_facility ? a.source_facility.name : '—'} &nbsp;→&nbsp; ${a.target_facility ? a.target_facility.name : '—'}</div>` : ''}
-                        ${a.quantity_needed ? `<div class="detail-item">${icons.trendDown} <strong>Needed:</strong>&nbsp;${a.quantity_needed} units</div>` : ''}
-                        ${a.quantity_available !== undefined ? `<div class="detail-item">${icons.box} <strong>${a.type === 'ROP' ? 'Current Stock' : 'Available'}:</strong>&nbsp;${a.quantity_available} units</div>` : ''}
-                        ${a.expiry_date ? `<div class="detail-item">${icons.calendar} <strong>Expiry:</strong>&nbsp;${formatStrictDate(a.expiry_date)}</div>` : ''}
+                        ${detailsHtml}
                     </div>
                     
-                    ${a.notes ? `<div style="font-size:0.85rem; color:#4a5568; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 6px;">${icons.note} <strong>Note:</strong> ${a.notes}</div>` : ''}
+                    ${a.notes ? `<div style="font-size:0.85rem; color:#4a5568; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 6px;">${icons.note} <strong>System Note:</strong> ${a.notes}</div>` : ''}
                     
                     ${actions ? `<div class="alert-card-footer" style="margin-top: 0; padding-top: 15px; border-top: 1px dashed #e2e8f0;">${actions}</div>` : ''}
                   </div>
@@ -162,7 +178,8 @@ block scripts
               `;
             }).join('');
           })
-          .catch(() => {
+          .catch(err => {
+            console.error(err);
             showError('Failed to load alerts');
           });
       };
@@ -201,7 +218,7 @@ block scripts
         modal.className = 'modal-backdrop';
         modal.style.display = 'flex';
         modal.innerHTML = `
-        <div class="modal-box" style="max-width:550px; border-top: 4px solid #0052CC;">
+        <div class="modal-box" style="max-width:750px; border-top: 4px solid #0052CC;">
             <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
                 <h3 style="color: #333;">Fetching Network Matches...</h3>
                 <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
@@ -406,7 +423,7 @@ block scripts
         }
       };
 
-      // SMART REFRESH: Pauses the timer if you are actively clicking an accordion or viewing a modal
+      // SMART REFRESH
       setInterval(() => {
         const isInteracting = document.querySelector('.alert-accordion.expanded') || document.querySelector('.modal-backdrop');
         if (!isInteracting) loadAlerts();
