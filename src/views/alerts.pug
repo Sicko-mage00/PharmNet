@@ -14,17 +14,65 @@ block scripts
     document.addEventListener('DOMContentLoaded', () => {
       const user = getUser();
 
+      // ─── SVG ICON LIBRARY ────────────────────────────────────
+      const icons = {
+        bell: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`,
+        trendDown: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline></svg>`,
+        box: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
+        calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
+        note: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`,
+        warning: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
+        check: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+        cross: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+        star: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--warning)" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
+        globe: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`,
+        fire: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`
+      };
+
+      const formatCompactDate = (dateString) => {
+        if (!dateString) return '—';
+        const d = new Date(dateString);
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(d); // e.g., 15 Jun
+      };
+
+      // ─── ADD THIS FUNCTION BACK ───
+      const formatStrictDate = (dateString) => {
+        if (!dateString) return '—';
+        const d = new Date(dateString);
+        return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+      };
+
+      // ─── ACCORDION TOGGLE LOGIC ──────────────────────────────
+      window.toggleAccordion = (element, event) => {
+        event.stopPropagation(); // Prevents the global click listener from immediately closing it
+        const accordion = element.closest('.alert-accordion');
+        const wasExpanded = accordion.classList.contains('expanded');
+        
+        // Close all other open accordions first
+        document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
+        
+        // Open this one if it wasn't already open
+        if (!wasExpanded) accordion.classList.add('expanded');
+      };
+
+      // Global listener to slide back in if clicking outside
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.alert-accordion')) {
+          document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
+        }
+      });
+
       const loadAlerts = () => {
         fetch('/api/alerts', { credentials: 'include' })
           .then(r => r.json())
           .then(data => {
-            const alerts    = data.alerts || [];
+            const alerts = data.alerts || [];
             const container = document.getElementById('alerts-container');
 
             if (!alerts.length) {
               container.innerHTML = `
                 <div class="empty-state">
-                  <div class="empty-state-icon">🔔</div>
+                  <div class="empty-state-icon" style="color: #a0aec0; margin-bottom: 10px;">${icons.bell}</div>
                   <p>No active alerts</p>
                 </div>`;
               return;
@@ -39,52 +87,83 @@ block scripts
               const isSelfAlert   = sourceFacId === targetFacId;
 
               let actions = '';
+              let previewText = '';
 
+              // Dynamic SMS-Style Preview Generator
+              if (isSelfAlert) {
+                  previewText = a.type === 'ROP' 
+                      ? `Low stock: Only ${a.quantity_available} left — Need ${a.quantity_needed}` 
+                      : `Expiration warning — ${a.quantity_available} units expiring`;
+              } else {
+                  if (a.status === 'pending' && isSource) previewText = `Transfer request from ${a.target_facility?.name || 'facility'}`;
+                  else if (a.status === 'pending' && isTarget) previewText = `Incoming discount offer from ${a.source_facility?.name || 'facility'}`;
+                  else if (a.status === 'confirmed') previewText = `Match confirmed — awaiting dispatch`;
+                  else if (a.status === 'dispatched') previewText = `Drugs dispatched — awaiting receipt`;
+                  else previewText = a.notes || 'Status updated';
+              }
+
+              // Action Buttons
               if (a.status === 'pending' && isSource && !isSelfAlert) {
-                actions += `<button class="btn btn-success btn-sm" onclick="doAlert('${a._id}','confirm')">✓ Confirm</button>`;
-                actions += `<button class="btn btn-danger btn-sm" onclick="doAlert('${a._id}','decline')">✗ Decline</button>`;
+                actions += `<button class="btn btn-success btn-sm" onclick="doAlert('${a._id}','confirm')">${icons.check} Confirm</button>`;
+                actions += `<button class="btn btn-danger btn-sm" onclick="doAlert('${a._id}','decline')">${icons.cross} Decline</button>`;
               }
               if (a.status === 'confirmed' && isSource) {
-                actions += `<button class="btn btn-primary btn-sm" onclick="doAlert('${a._id}','dispatch')">📦 Mark Dispatched</button>`;
+                actions += `<button class="btn btn-primary btn-sm" onclick="doAlert('${a._id}','dispatch')">${icons.box} Mark Dispatched</button>`;
               }
               if (a.status === 'dispatched' && isTarget) {
-                actions += `<button class="btn btn-success btn-sm" onclick="resolveWithBatch('${a._id}')">✓ Mark Received</button>`;
+                actions += `<button class="btn btn-success btn-sm" onclick="resolveWithBatch('${a._id}')">${icons.check} Mark Received</button>`;
               }
+              
+              if (a.status === 'pending' && isSelfAlert) {
+                  if (a.type === 'ROP') {
+                      actions += `<button class="btn btn-primary btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_needed}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
+                  } else if (a.type === 'FEFO') {
+                      actions += `<button class="btn btn-warning btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_available}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
+                  }
+              }
+
               if (['pending', 'confirmed'].includes(a.status) && isTarget) {
                 actions += `<button class="btn btn-ghost btn-sm" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
               }
 
-              const typeLabel = a.type === 'ROP'
-                ? `<span style="color:var(--danger);font-weight:700">🔴 ROP</span>`
-                : `<span style="color:var(--warning);font-weight:700">🟡 FEFO</span>`;
+              const pillBadge = a.type === 'ROP' 
+                ? `<span class="badge-pill badge-rop-pill">ROP</span>` 
+                : `<span class="badge-pill badge-fefo-pill">FEFO</span>`;
 
               return `
-                <div class="alert-card ${a.type}">
-                  <div class="alert-card-header">
-                    <span class="alert-card-title">${typeLabel} — ${a.drug_name || '—'}</span>
-                    <span class="badge badge-${a.status}">${a.status}</span>
+                <div class="alert-accordion">
+                  <div class="alert-header" onclick="toggleAccordion(this, event)">
+                    <div class="alert-header-top">
+                      <span class="drug-name">${a.drug_name || '—'}</span>
+                      <span class="alert-date">${formatCompactDate(a.created_at)}</span>
+                    </div>
+                    <div class="alert-header-bottom">
+                      <span class="alert-preview">${previewText}</span>
+                      <div class="alert-badges">
+                        ${pillBadge}
+                        <span class="badge badge-${a.status}">${a.status}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div class="alert-card-body">
-                    <p>
-                      <strong>From:</strong> ${a.source_facility ? a.source_facility.name : '—'}
-                      &nbsp;→&nbsp;
-                      <strong>To:</strong> ${a.target_facility ? a.target_facility.name : '—'}
-                    </p>
-                    ${a.quantity_needed   ? `<p>📉 <strong>Needed:</strong> ${a.quantity_needed} units</p>`   : ''}
-                    ${a.quantity_available? `<p>📦 <strong>Available:</strong> ${a.quantity_available} units</p>` : ''}
-                    ${a.expiry_date       ? `<p>📅 <strong>Expiry:</strong> ${new Date(a.expiry_date).toLocaleDateString('en-NG')}</p>` : ''}
-                    ${a.notes             ? `<p>📝 <strong>Note:</strong> ${a.notes}</p>` : ''}
-                    ${isSelfAlert         ? `<p style="color:var(--warning);font-size:0.8rem">⚠ No network match found — consider external procurement</p>` : ''}
-                    <p style="font-size:0.78rem;color:#8492a6;margin-top:0.4rem">${new Date(a.created_at).toLocaleString('en-NG')}</p>
+                  
+                  <div class="alert-body">
+                    <div class="alert-details-grid">
+                        ${!isSelfAlert ? `<div class="detail-item"><strong>Route:</strong>&nbsp;${a.source_facility ? a.source_facility.name : '—'} &nbsp;→&nbsp; ${a.target_facility ? a.target_facility.name : '—'}</div>` : ''}
+                        ${a.quantity_needed ? `<div class="detail-item">${icons.trendDown} <strong>Needed:</strong>&nbsp;${a.quantity_needed} units</div>` : ''}
+                        ${a.quantity_available !== undefined ? `<div class="detail-item">${icons.box} <strong>${a.type === 'ROP' ? 'Current Stock' : 'Available'}:</strong>&nbsp;${a.quantity_available} units</div>` : ''}
+                        ${a.expiry_date ? `<div class="detail-item">${icons.calendar} <strong>Expiry:</strong>&nbsp;${formatStrictDate(a.expiry_date)}</div>` : ''}
+                    </div>
+                    
+                    ${a.notes ? `<div style="font-size:0.85rem; color:#4a5568; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 6px;">${icons.note} <strong>Note:</strong> ${a.notes}</div>` : ''}
+                    
+                    ${actions ? `<div class="alert-card-footer" style="margin-top: 0; padding-top: 15px; border-top: 1px dashed #e2e8f0;">${actions}</div>` : ''}
                   </div>
-                  ${actions ? `<div class="alert-card-footer">${actions}</div>` : ''}
                 </div>
               `;
             }).join('');
           })
           .catch(() => {
-            document.getElementById('alerts-container').innerHTML =
-              '<div class="flash flash-error">Failed to load alerts</div>';
+            showError('Failed to load alerts');
           });
       };
 
@@ -115,8 +194,163 @@ block scripts
         else showError(data.message || 'Action failed');
       };
 
+      // ─── THE SMART NETWORK MATCHER MODAL ─────────────────────
+      window.openNetworkModal = async (drugId, drugName, defaultQty, transactionType, alertType) => {
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal-backdrop';
+        modal.style.display = 'flex';
+        modal.innerHTML = `
+        <div class="modal-box" style="max-width:550px; border-top: 4px solid #0052CC;">
+            <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                <h3 style="color: #333;">Fetching Network Matches...</h3>
+                <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+            </div>
+            <div class="modal-body" style="padding: 30px 0; text-align: center;">
+                <div class="spinner" style="margin: 0 auto;"></div>
+                <p style="margin-top: 15px; color: #666;">Analyzing facility tiers and geography...</p>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+
+        try {
+            const res = await fetch(`/api/alerts/network-matches?drugName=${encodeURIComponent(drugName)}&type=${alertType}`, {
+                credentials: 'include'
+            });
+            const responseData = await res.json();
+
+            if (!res.ok) throw new Error(responseData.message);
+
+            const { priorityMatches, recommended, openNetwork } = responseData.data;
+            
+            const inputType = alertType === 'ROP' ? 'checkbox' : 'radio';
+            const instructionText = alertType === 'ROP' 
+                ? 'Select one or more facilities to request stock from. The first to confirm will fulfill the order.' 
+                : 'Select ONE facility to offer your discounted stock to prevent double-selling.';
+
+            // Clean, responsive list builder
+            const buildList = (facilities, isPriority = false) => facilities.map(f => `
+                <div class="network-match-card ${isPriority ? 'priority-match-card' : ''}">
+                    <input type="${inputType}" name="facilitySelection" value="${f.facilityId}" id="fac-${f.facilityId}" data-type="${f.transactionType}" class="network-match-checkbox">
+                    <label for="fac-${f.facilityId}" class="network-match-info" style="cursor: pointer; margin: 0;">
+                        <strong>${f.name}</strong>
+                        <span>${f.tier} • ${f.state} (${f.lga})</span>
+                    </label>
+                    <span class="badge badge-${isPriority ? 'warning' : 'success'} network-match-status">${f.statusText}</span>
+                </div>
+            `).join('');
+
+            const modalBox = modal.querySelector('.modal-box');
+            modalBox.innerHTML = `
+                <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                    <h3 style="color: #333;">Confirm Transaction Details</h3>
+                    <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+                </div>
+                
+                <div class="modal-body" style="padding: 15px 0; max-height: 60vh; overflow-y: auto;">
+                    <p style="font-size:0.9rem; color:#8492a6; margin-bottom: 15px;">${instructionText}</p>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                        <p style="margin-bottom: 8px;"><strong>Drug:</strong> ${drugName}</p>
+                        <p style="margin-bottom: 8px;"><strong>Quantity:</strong> ${defaultQty}</p>
+                        <div style="margin-top: 10px;">
+                            <label style="font-size: 0.85rem; font-weight: bold;">Confirm Unit Metric:</label>
+                            <select class="form-control" id="draft-unit" style="margin-top: 4px;">
+                                <option value="Carton">Carton</option>
+                                <option value="Roll">Roll</option>
+                                <option value="Pack" selected>Pack</option>
+                                <option value="Card">Card</option>
+                                <option value="Bottle">Bottle</option>
+                                <option value="Pieces">Pieces</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    ${priorityMatches && priorityMatches.length > 0 ? `
+                      <h4 style="display: flex; align-items: center; font-size: 1rem; margin-bottom: 10px; color: #c05621;">${icons.fire} Priority Matches (Waste vs Want)</h4>
+                      <p style="font-size: 0.8rem; color: #718096; margin-bottom: 10px;">These facilities have surplus expiring within 180 days. Selecting them automatically structures a Discounted Offload.</p>
+                      ${buildList(priorityMatches, true)}
+                    ` : ''}
+
+                    <h4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #2b6cb0;">${icons.star} Recommended Network Matches</h4>
+                    ${recommended.length > 0 ? buildList(recommended) : '<p style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 15px;">No standard peer-tier facilities found in your state.</p>'}
+
+                    <h4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #4a5568;">${icons.globe} Open Network Directory</h4>
+                    ${openNetwork.length > 0 ? buildList(openNetwork) : '<p style="font-size: 0.85rem; color: #a0aec0;">No additional facilities available.</p>'}
+                </div>
+
+                <div id="transfer-result"></div>
+                
+                <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px;">
+                    <button class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
+                    <button class="btn btn-success" style="width: 100%; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
+                </div>
+            `;
+
+        } catch (err) {
+            modal.querySelector('.modal-body').innerHTML = `<div class="flash flash-error">${err.message || 'Failed to fetch network directory.'}</div>`;
+        }
+      };
+
+      // ─── BATCH TRANSMIT LOGIC ────────────────────────────────
+      window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
+        const resultDiv = document.getElementById('transfer-result');
+        const unit = document.getElementById('draft-unit').value;
+        
+        const selectedInputs = document.querySelectorAll('input[name="facilitySelection"]:checked');
+        if (selectedInputs.length === 0) {
+            resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.warning} Please select at least one facility.</div>`;
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Transmitting...';
+
+        try {
+            const promises = Array.from(selectedInputs).map(async (input) => {
+                const targetFacId = input.value;
+                const dynamicTxType = input.getAttribute('data-type'); 
+                
+                const draftRes = await fetch('/api/alerts/transfer/draft', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        providerFacilityId: targetFacId,
+                        drugId: drugId,
+                        quantityRequested: defaultQty,
+                        unit: unit, 
+                        transactionType: dynamicTxType
+                    })
+                });
+                const draftData = await draftRes.json();
+                if (!draftRes.ok) throw new Error(draftData.message);
+
+                const transRes = await fetch(`/api/alerts/transfer/${draftData.draft._id}/transmit`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                if (!transRes.ok) throw new Error('Transmission failed for ' + targetFacId);
+            });
+
+            await Promise.all(promises);
+
+            resultDiv.innerHTML = `<div class="flash flash-success" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.check} Transmitted Successfully!</div>`;
+            setTimeout(() => {
+                document.querySelector('.modal-backdrop')?.remove();
+                loadAlerts();
+            }, 1200);
+
+        } catch (err) {
+            resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.cross} ${err.message}</div>`;
+            btn.disabled = false;
+            btn.textContent = 'Confirm & Transmit';
+        }
+      };
+
+      // ─── RESOLUTION LOGIC ────────────────────────────────────
       window.resolveWithBatch = (id) => {
-        // Show in-app modal instead of prompt()
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop';
         modal.style.display = 'flex';
@@ -124,7 +358,7 @@ block scripts
           <div class="modal-box" style="max-width:420px">
             <div class="modal-header">
               <h3>Confirm Receipt</h3>
-              <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">✕</button>
+              <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
             </div>
             <p style="font-size:0.875rem;color:#8492a6;margin-bottom:1rem">
               Enter the batch number you added to your inventory after receiving the drugs.
@@ -136,7 +370,7 @@ block scripts
             <div id="resolve-result"></div>
             <div class="modal-footer">
               <button class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
-              <button class="btn btn-success" onclick="submitResolve('${id}', this)">✓ Mark Received</button>
+              <button class="btn btn-success" onclick="submitResolve('${id}', this)">${icons.check} Mark Received</button>
             </div>
           </div>`;
         document.body.appendChild(modal);
@@ -168,10 +402,13 @@ block scripts
         } else {
           result.innerHTML = `<div class="flash flash-error" style="margin-top:0.5rem">${data.message || 'Failed to resolve'}</div>`;
           btn.disabled = false;
-          btn.textContent = '✓ Mark Received';
+          btn.textContent = '${icons.check} Mark Received';
         }
       };
 
-      // auto-refresh every 15 seconds
-      setInterval(loadAlerts, 15000);
+      // SMART REFRESH: Pauses the timer if you are actively clicking an accordion or viewing a modal
+      setInterval(() => {
+        const isInteracting = document.querySelector('.alert-accordion.expanded') || document.querySelector('.modal-backdrop');
+        if (!isInteracting) loadAlerts();
+      }, 15000);
     });

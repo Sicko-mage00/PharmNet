@@ -1,153 +1,131 @@
 import Drug from '../models/drug.js';
 import Alert from '../models/alert.js';
 
-// ─── ROP MATCHER ─────────────────────────────────────────
+// ─── 1. ROP TRIGGER (Creates a Self-Alert) ────────────────────────
 export const matchROP = async (ropData, saleId) => {
+  console.log('[matcher#matchROP] Triggered for:', ropData.drug_name);
 
-  // Debug logging for ROP matching
-  console.log('[matcher#matchROP] ropData=', {
-    drug_id: ropData?.drug_id?.toString?.() || ropData?.drug_id,
-    drug_name: ropData?.drug_name,
-    facility_id: ropData?.facility_id?.toString?.() || ropData?.facility_id,
-    quantity_needed: ropData?.quantity_needed,
-    saleId: saleId?.toString?.() || saleId,
+  // FETCH THE DRUG TO GET THE EXACT CURRENT LOW STOCK
+  const drug = await Drug.findById(ropData.drug_id);
+
+  const selfAlert = await Alert.create({
+    type:              'ROP',
+    drug_id:           ropData.drug_id,
+    drug_name:         ropData.drug_name,
+    source_facility:   ropData.facility_id, 
+    target_facility:   ropData.facility_id,
+    quantity_needed:   ropData.quantity_needed,
+    quantity_available: drug ? drug.total_quantity : 0, // ── Captures exact current stock
+    triggered_by_sale: saleId,
+    status:            'pending',
+    notes:             'Low stock detected. Click to request from network.',
   });
 
-  const potentialSources = await Drug.find({
-    drug_name:   ropData.drug_name,
-    facility_id: { $ne: ropData.facility_id },
-    isActive:    true,
-    $expr: {
-      $gte: [
-        '$total_quantity',
-        { $multiply: ['$reorder_point', 1.2] }
-      ]
-    },
-  })
-  .populate('facility_id', 'name location isNetworkMember isActive')
-  .sort({ total_quantity: -1 });
-
-  const validSources = potentialSources.filter(d =>
-    d.facility_id &&
-    d.facility_id.isNetworkMember &&
-    d.facility_id.isActive
-  );
-
-  // no match — create self alert
-  console.log('[matcher#matchROP] validSources.length=', validSources.length);
-  if (!validSources.length) {
-    const selfAlert = await Alert.create({
-      type:              'ROP',
-      drug_id:           ropData.drug_id,
-      drug_name:         ropData.drug_name,
-      source_facility:   ropData.facility_id,
-      target_facility:   ropData.facility_id,
-      quantity_needed:   ropData.quantity_needed,
-      triggered_by_sale: saleId,
-      notes:             'No matching supplier found in network',
-    });
-    return [{ alert: selfAlert, matched: false }];
-  }
-
-  // create one alert per valid source — all notified simultaneously
-  const results = [];
-
-  for (const source of validSources) {
-    const existingAlert = await Alert.findOne({
-      drug_id:         ropData.drug_id,
-      target_facility: ropData.facility_id,
-      source_facility: source.facility_id._id,
-      status:          { $in: ['pending', 'confirmed'] },
-    });
-
-    if (existingAlert) {
-      results.push({ alert: existingAlert, matched: true });
-      continue;
-    }
-
-    const alert = await Alert.create({
-      type:               'ROP',
-      drug_id:            ropData.drug_id,
-      drug_name:          ropData.drug_name,
-      source_facility:    source.facility_id._id,
-      target_facility:    ropData.facility_id,
-      quantity_available: source.total_quantity - source.reorder_point,
-      quantity_needed:    ropData.quantity_needed,
-      triggered_by_sale:  saleId,
-    });
-
-    results.push({ alert, matched: true });
-  }
-
-  console.log('[matcher#matchROP] created alerts count=', results.length);
-  return results;
+  return [{ alert: selfAlert, matched: false }];
 };
 
-
-// ─── FEFO MATCHER ────────────────────────────────────────
+// ─── 2. FEFO TRIGGER (Creates a Self-Alert) ───────────────────────
 export const matchFEFO = async (fefoData, saleId) => {
+  console.log('[matcher#matchFEFO] Triggered for:', fefoData.drug_name);
 
-  const potentialTargets = await Drug.find({
-    drug_name:   fefoData.drug_name,
-    facility_id: { $ne: fefoData.facility_id },
-    isActive:    true,
-    $expr: {
-      $lte: ['$total_quantity', '$reorder_point']
-    },
-  })
-  .populate('facility_id', 'name location isNetworkMember isActive')
-  .sort({ total_quantity: 1 });
+  const selfAlert = await Alert.create({
+    type:               'FEFO',
+    drug_id:            fefoData.drug_id,
+    drug_name:          fefoData.drug_name,
+    source_facility:    fefoData.facility_id,
+    target_facility:    fefoData.facility_id,
+    quantity_available: fefoData.quantity,
+    expiry_date:        fefoData.expiry_date,
+    triggered_by_sale:  saleId,
+    status:             'pending',
+    notes:              'Drugs expiring soon. Click to push discounted offload.',
+  });
 
-  const validTargets = potentialTargets.filter(d =>
-    d.facility_id &&
-    d.facility_id.isNetworkMember &&
+  return [{ alert: selfAlert, matched: false }];
+};
+
+// ─── 3. THE TIER, GEOGRAPHY & WASTE-VS-WANT ENGINE ────────────────
+export const getCategorizedMatches = async (requesterFacility, drugName, alertType) => {
+  let potentialMatches = await Drug.find({
+    drug_name: drugName,
+    facility_id: { $ne: requesterFacility._id }, 
+    isActive: true
+  }).populate('facility_id', 'name state lga tier isNetworkMember isActive');
+
+  const validMatches = potentialMatches.filter(d => 
+    d.facility_id && 
+    d.facility_id.isNetworkMember && 
     d.facility_id.isActive
   );
 
-  if (!validTargets.length) {
-    const selfAlert = await Alert.create({
-      type:               'FEFO',
-      drug_id:            fefoData.drug_id,
-      drug_name:          fefoData.drug_name,
-      source_facility:    fefoData.facility_id,
-      target_facility:    fefoData.facility_id,
-      quantity_available: fefoData.quantity,
-      expiry_date:        fefoData.expiry_date,
-      triggered_by_sale:  saleId,
-      notes:              'No matching recipient found in network',
-    });
-    return [{ alert: selfAlert, matched: false }];
-  }
+  const priorityMatches = []; 
+  const recommended = [];
+  const openNetwork = [];
 
-  const results = [];
+  const reqTier = requesterFacility.tier;
+  const reqState = requesterFacility.state;
+  
+  // Define the 180-day (6 month) FEFO liability threshold
+  const now = new Date();
+  const sixMonthsFromNow = new Date();
+  sixMonthsFromNow.setDate(now.getDate() + 180);
 
-  for (const target of validTargets) {
-    const existingAlert = await Alert.findOne({
-      drug_id:         fefoData.drug_id,
-      source_facility: fefoData.facility_id,
-      target_facility: target.facility_id._id,
-      status:          { $in: ['pending', 'confirmed'] },
-    });
+  for (const match of validMatches) {
+    const provFac = match.facility_id;
+    let isRecommended = false;
+    let isPriority = false;
 
-    if (existingAlert) {
-      results.push({ alert: existingAlert, matched: true });
-      continue;
+    // ROP LOGIC: Seeking Surplus or Expiring Drugs
+    if (alertType === 'ROP') {
+        if (match.total_quantity < (match.reorder_point * 1.2)) continue;
+
+        // WASTE VS WANT CHECK
+        if (match.expiry_date && new Date(match.expiry_date) <= sixMonthsFromNow) {
+            isPriority = true;
+        }
     }
 
-    const alert = await Alert.create({
-      type:               'FEFO',
-      drug_id:            fefoData.drug_id,
-      drug_name:          fefoData.drug_name,
-      source_facility:    fefoData.facility_id,
-      target_facility:    target.facility_id._id,
-      quantity_available: fefoData.quantity,
-      quantity_needed:    target.reorder_point - target.total_quantity,
-      expiry_date:        fefoData.expiry_date,
-      triggered_by_sale:  saleId,
-    });
+    // FEFO LOGIC: Pushing Expiring Drugs
+    if (alertType === 'FEFO') {
+        if (match.total_quantity > match.reorder_point) continue; 
+    }
 
-    results.push({ alert, matched: true });
+    // Tier Matching (Peer-to-Peer & One-Up)
+    const provTier = provFac.tier;
+    let tierMatch = false;
+
+    if (reqTier === 'Tier 3' && (provTier === 'Tier 3' || provTier === 'Tier 2')) tierMatch = true;
+    if (reqTier === 'Tier 2' && (provTier === 'Tier 2' || provTier === 'Tier 1')) tierMatch = true;
+    if (reqTier === 'Tier 1' && (provTier === 'Tier 1' || provTier === 'Tier 2')) tierMatch = true;
+
+    const stateMatch = (reqState === provFac.state);
+
+    if (tierMatch && stateMatch) {
+        isRecommended = true;
+    }
+
+    const facilityData = {
+        facilityId: provFac._id,
+        name: provFac.name,
+        tier: provFac.tier,
+        state: provFac.state,
+        lga: provFac.lga,
+        statusText: isPriority ? 'Expiring Soon (Discount Available)' : (alertType === 'ROP' ? 'Sufficient Stock' : 'Demand High'),
+        transactionType: isPriority ? 'Discounted Offload' : 'Standard Requisition'
+    };
+
+    if (isPriority) {
+        priorityMatches.push(facilityData);
+    } else if (isRecommended) {
+        recommended.push(facilityData);
+    } else {
+        openNetwork.push(facilityData);
+    }
   }
 
-  return results;
+  return {
+      priorityMatches,
+      recommended,
+      openNetwork
+  };
 };
