@@ -4,7 +4,7 @@ block content
   .page-header
     div(style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;")
       h2.page-title#drug-title Drug Details
-      #drug-actions-container
+      #drug-actions-container(style="display:flex; gap:0.5rem;")
     a.btn.btn-ghost(href='/inventory') ← Back
 
   .card#drug-info
@@ -25,7 +25,7 @@ block content
       .form-row
         .form-group
           label Batch Number (Auto-Generated)
-          input.form-control(type='text' id='batch_number' required readonly style="background:#f8fafc; color:#a0aec0; cursor:not-allowed;")
+          input.form-control(type='text' id='batch_number' required readonly style="background:#f8fafc; color:#a0aec0; cursor:not-allowed;" value="Loading...")
         .form-group
           label Quantity
           input.form-control(type='number' id='quantity' min='1' placeholder='e.g 100' required)
@@ -36,7 +36,7 @@ block content
         .form-group
           label Unit Price (₦)
           input.form-control(type='number' id='unit_price' min='0' placeholder='e.g 150')
-      button.btn.btn-primary(type='submit' style="width:100%; justify-content:center; padding:0.85rem;") Add Batch
+      button.btn.btn-primary(type='submit' style="width:200px; display:block; margin: 1rem auto 0; padding:0.85rem;") Add Batch
 
 block scripts
   script.
@@ -51,7 +51,8 @@ block scripts
       const now = new Date();
       const target = new Date(dateString);
       const diffTime = target - now;
-      if (diffTime < 0) return '<span style="color:var(--danger)"> (Expired)</span>';
+      if (diffTime < 0) return ' <span style="color:var(--danger)">(Expired)</span>';
+      
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       if (diffDays === 0) return ' (Expires today)';
       if (diffDays < 7) return ` (${diffDays} days left)`;
@@ -72,9 +73,6 @@ block scripts
       if (!wasExpanded) accordion.classList.add('expanded');
     };
 
-    // Auto-generate Batch ID for the form
-    document.getElementById('batch_number').value = 'BCH-' + Math.random().toString(36).substr(2, 5).toUpperCase() + Date.now().toString().slice(-4);
-
     document.addEventListener('DOMContentLoaded', () => {
       const drugId = window.location.pathname.split('/').pop();
 
@@ -84,17 +82,21 @@ block scripts
         const d = data.drug;
         document.getElementById('drug-title').textContent = d.drug_name;
 
+        // ── SEQUENTIAL BATCH GENERATOR ──
+        const nextBatchNum = d.batches ? d.batches.length + 1 : 1;
+        document.getElementById('batch_number').value = `BATCH-${String(nextBatchNum).padStart(3, '0')}`;
+
         const isLow = d.total_quantity <= d.reorder_point;
 
-        // ── INJECT DSS ROP BUTTON AT TOP OF PAGE ──
+        // ── INJECT DSS ROP BUTTON & DELETE DRUG BUTTON ──
+        let topActionsHtml = '';
         if (isLow) {
-            const qtyNeeded = d.reorder_point * 2; // Standard suggestion
-            document.getElementById('drug-actions-container').innerHTML = `
-              <button class="btn btn-primary" onclick="openNetworkModal('${d._id}', '${d.drug_name}', ${qtyNeeded}, 'Standard Requisition', 'ROP')">
-                Request from Network
-              </button>
-            `;
+            const qtyNeeded = d.reorder_point * 2; 
+            topActionsHtml += `<button class="btn btn-primary btn-sm" style="margin: 0;" onclick="openNetworkModal('${d._id}', '${d.drug_name}', ${qtyNeeded}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
         }
+        topActionsHtml += `<button class="btn btn-sm" style="margin: 0; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;" onclick="confirmDeleteDrug('${d._id}', '${d.drug_name}')">Delete Drug</button>`;
+        
+        document.getElementById('drug-actions-container').innerHTML = topActionsHtml;
 
         document.getElementById('drug-info').innerHTML = `
           <div class="drug-meta">
@@ -130,7 +132,7 @@ block scripts
 
         const container = document.getElementById('batches-container');
 
-        if (!d.batches.length) {
+        if (!d.batches || d.batches.length === 0) {
           container.innerHTML = '<div class="empty-state"><p>No batches found</p></div>';
           return;
         }
@@ -145,18 +147,25 @@ block scripts
           let tagHtml = `<span class="badge badge-ok">Good</span>`;
           let pushDiscountBtn = '';
 
-          // FEFO Logic for specific batches
-          if (days <= 30 && days > 0) {
+          // FEFO / EXPIRED Logic
+          if (days <= 0) {
+            borderClass = 'batch-accordion fefo-warning';
+            tagHtml = `<span class="badge badge-low" style="background:#dc3545; color:white; border:none;">Expired</span>`;
+            pushDiscountBtn = `<button class="btn btn-danger btn-sm" style="width: fit-content; background: #dc3545; color: white; border: none;" onclick="showExpiredModal()">Drug Expired!</button>`;
+          } else if (days <= 30 && days > 0) {
             borderClass = 'batch-accordion fefo-warning';
             tagHtml = `<span class="badge badge-low">Urgent</span>`;
-            pushDiscountBtn = `<button class="btn btn-warning alert-action-btn" onclick="openNetworkModal('${d._id}', '${d.drug_name}', ${b.quantity}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
+            pushDiscountBtn = `<button class="btn btn-warning btn-sm" style="width: fit-content;" onclick="openNetworkModal('${d._id}', '${d.drug_name}', ${b.quantity}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
           } else if (i === 0 && days <= (d.expiry_alert_days || 180)) {
             tagHtml = `<span class="badge badge-pending">Next Expiry</span>`;
-            pushDiscountBtn = `<button class="btn btn-warning alert-action-btn" onclick="openNetworkModal('${d._id}', '${d.drug_name}', ${b.quantity}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
-          } else if (days <= 0) {
-            borderClass = 'batch-accordion fefo-warning';
-            tagHtml = `<span class="badge badge-low" style="background:#495057; color:white; border:none;">Expired</span>`;
-          }
+            pushDiscountBtn = `<button class="btn btn-warning btn-sm" style="width: fit-content;" onclick="openNetworkModal('${d._id}', '${d.drug_name}', ${b.quantity}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
+          } 
+
+          // Delete Batch Button
+          const deleteBatchBtn = `
+            <button class="btn btn-ghost btn-sm" style="color: #dc2626; padding: 0.25rem 0.5rem; height: auto; min-height: 0;" onclick="confirmDeleteBatch('${d._id}', '${b.batch_number}')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right:4px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>Delete Batch
+            </button>`;
 
           return `
             <div class="${borderClass}">
@@ -172,68 +181,153 @@ block scripts
               </div>
               
               <div class="batch-body">
-                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px;">
-                  <div class="detail-item"><strong>Expiry Date:</strong>&nbsp;${formatStrictDate(b.expiry_date)} <span style="font-size:0.8rem; color:var(--text-muted);">&nbsp;${getRelativeTime(b.expiry_date)}</span></div>
-                  <div class="detail-item"><strong>Unit Price:</strong>&nbsp;₦${b.unit_price || '—'}</div>
-                  <div class="detail-item"><strong>Received:</strong>&nbsp;${formatStrictDate(b.received_date)}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:16px; margin-bottom:12px;">
+                  <div style="flex: 1 1 250px; min-width: 250px;"><strong>Expiry Date:</strong>&nbsp;<span style="white-space:nowrap; font-weight: 500;">${formatStrictDate(b.expiry_date)}<span style="color:var(--text-muted); font-weight:normal; font-size:0.85rem;">${getRelativeTime(b.expiry_date)}</span></span></div>
+                  <div style="flex: 1 1 150px; min-width: 150px;"><strong>Unit Price:</strong>&nbsp;₦${b.unit_price || '—'}</div>
+                  <div style="flex: 1 1 200px; min-width: 200px;"><strong>Received:</strong>&nbsp;${formatStrictDate(b.received_date || b.created_at)}</div>
                 </div>
-                ${pushDiscountBtn ? `<div class="alert-card-footer" style="width: fit-content; justify-self: normal;">${pushDiscountBtn}</div>` : ''}
+                
+                <div style="display:flex; flex-wrap: wrap; gap: 15px; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 12px; margin-top: 8px;">
+                  <div>${pushDiscountBtn}</div>
+                  <div>${deleteBatchBtn}</div>
+                </div>
               </div>
             </div>
           `;
         }).join('');
+      })
+      .catch(err => {
+         console.error("Inventory Detail crash:", err);
+         document.getElementById('drug-info').innerHTML = `<div class="flash flash-error">Failed to load details.</div>`;
+         document.getElementById('batches-container').innerHTML = '';
       });
 
       document.getElementById('add-batch-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const btn = e.target.querySelector('button[type="submit"]');
-        btn.textContent = 'Adding...';
-        btn.disabled = true;
-
-        const body = {
-          batch_number: document.getElementById('batch_number').value,
-          quantity:     parseInt(document.getElementById('quantity').value) || 0,
-          expiry_date:  document.getElementById('expiry_date').value,
-          unit_price:   parseFloat(document.getElementById('unit_price').value) || null,
-        };
-
+        btn.textContent = 'Adding...'; btn.disabled = true;
         try {
           const res = await fetch(`/api/inventory/${drugId}/batch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(body),
+            body: JSON.stringify({
+              batch_number: document.getElementById('batch_number').value,
+              quantity: parseInt(document.getElementById('quantity').value),
+              expiry_date: document.getElementById('expiry_date').value,
+              unit_price: parseFloat(document.getElementById('unit_price').value)
+            }),
           });
-          const data = await res.json();
-          if (res.ok) {
-            window.location.reload();
-          } else {
-            btn.textContent = 'Add Batch';
-            btn.disabled = false;
-            let err = document.getElementById('batch-error');
-            if (!err) {
-              err = document.createElement('div');
-              err.id = 'batch-error';
-              err.className = 'flash flash-error';
-              e.target.prepend(err);
-            }
-            err.textContent = data.message || 'Failed to add batch';
-          }
-        } catch (err) {
-          btn.textContent = 'Add Batch';
-          btn.disabled = false;
-        }
+          if (res.ok) window.location.reload();
+        } catch (err) { btn.textContent = 'Add Batch'; btn.disabled = false; }
       });
     });
 
-    // ── COPY OVER THE MODAL LOGIC SO IT WORKS HERE TOO ──
+    // ── ICONS GLOBALS ──
     const icons = {
         cross: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
         fire: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`,
         star: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--warning)" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
-        globe: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`
+        globe: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path></svg>`
     };
 
+    // ── POPUP: DRUG EXPIRED ──
+    window.showExpiredModal = () => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+        <div class="modal-box" style="max-width:380px; text-align:center;">
+            <div class="modal-header" style="border-bottom:none; padding-bottom:0;">
+                <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+            </div>
+            <div class="modal-body" style="padding: 10px 20px 25px;">
+                <div style="color:var(--danger); margin-bottom:15px;">
+                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </div>
+                <h3 style="margin-bottom: 10px; color:#333;">Drug Expired!</h3>
+                <p style="color:#666; margin-bottom: 25px; line-height:1.5;">This batch has passed its expiry date. It cannot be offloaded to the network.</p>
+                <button class="btn btn-ghost" style="width:100%; justify-content:center; background:#f1f5f9;" onclick="this.closest('.modal-backdrop').remove()">Dismiss</button>
+            </div>
+        </div>`;
+      document.body.appendChild(modal);
+    };
+
+    // ── MODALS: DELETE DRUG & DELETE BATCH ──
+    window.confirmDeleteDrug = (drugId, drugName) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+        <div class="modal-box" style="max-width:400px;">
+            <div class="modal-header">
+                <h3>Delete Drug Record</h3>
+                <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+            </div>
+            <div class="modal-body" style="padding: 15px 0;">
+                <p style="color:#666; margin-bottom: 20px;">Are you sure you want to permanently delete <strong>${drugName}</strong> and all its batches? This action cannot be undone.</p>
+                <button class="btn btn-danger" style="width:100%; justify-content:center; background:#dc2626;" onclick="executeDeleteDrug('${drugId}', this)">Yes, Delete Drug</button>
+            </div>
+        </div>`;
+      document.body.appendChild(modal);
+    };
+
+    window.executeDeleteDrug = async (drugId, btn) => {
+        btn.textContent = 'Deleting...';
+        btn.disabled = true;
+        try {
+            let res = await fetch(`/api/inventory/${drugId}`, { method: 'DELETE', credentials: 'include' });
+            if (!res.ok && res.status === 404) {
+               res = await fetch(`/api/inventory/${drugId}/deactivate`, { method: 'PATCH', credentials: 'include' });
+            }
+            
+            if (res.ok) {
+                window.location.href = '/inventory';
+            } else {
+                alert("Failed to delete the drug.");
+                btn.textContent = 'Yes, Delete Drug';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            btn.disabled = false;
+        }
+    };
+
+    window.confirmDeleteBatch = (drugId, batchNum) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = `
+        <div class="modal-box" style="max-width:400px;">
+            <div class="modal-header">
+                <h3>Delete Batch</h3>
+                <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+            </div>
+            <div class="modal-body" style="padding: 15px 0;">
+                <p style="color:#666; margin-bottom: 20px;">Are you sure you want to delete <strong>${batchNum}</strong>? This action cannot be undone.</p>
+                <button class="btn btn-danger" style="width:100%; justify-content:center; background:#dc2626;" onclick="executeDeleteBatch('${drugId}', '${batchNum}', this)">Yes, Delete Batch</button>
+            </div>
+        </div>`;
+      document.body.appendChild(modal);
+    };
+
+    window.executeDeleteBatch = async (drugId, batchNum, btn) => {
+        btn.textContent = 'Deleting...';
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/api/inventory/${drugId}/batch/${batchNum}`, { method: 'DELETE', credentials: 'include' });
+            if (res.ok) {
+                window.location.reload();
+            } else {
+                alert("Failed to delete the batch. Ensure the backend endpoint exists.");
+                btn.textContent = 'Yes, Delete Batch';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            btn.disabled = false;
+        }
+    };
+
+    // ── FULL NETWORK MODAL LOGIC RESTORED ──
     window.openNetworkModal = async (drugId, drugName, defaultQty, transactionType, alertType) => {
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop';
@@ -294,17 +388,17 @@ block scripts
                     ${openNetwork.length > 0 ? buildList(openNetwork) : '<p style="font-size: 0.85rem; color: #a0aec0;">No additional facilities available.</p>'}
                 </div>
                 <div id="transfer-result"></div>
-                <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px;">
+                <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px; display: flex; justify-content: flex-end; gap: 10px;">
                     <button class="btn btn-ghost" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">Cancel</button>
-                    <button class="btn btn-success" style="width: fit-content%; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
+                    <button class="btn btn-success" style="width: 250px; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
                 </div>
             `;
         } catch (err) {
             modal.querySelector('.modal-body').innerHTML = `<div class="flash flash-error">${err.message || 'Failed to fetch network directory.'}</div>`;
         }
-      };
+    };
 
-      window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
+    window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
         const resultDiv = document.getElementById('transfer-result');
         const unit = document.getElementById('draft-unit').value;
         const selectedInputs = document.querySelectorAll('input[name="facilitySelection"]:checked');
@@ -340,4 +434,4 @@ block scripts
             btn.disabled = false;
             btn.textContent = 'Confirm & Transmit';
         }
-      };
+    };

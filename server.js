@@ -19,6 +19,9 @@ import viewRoute from './src/routes/view.js';
 import adminRoute from './src/routes/admin.js';
 import { checkExpiredAlerts } from './src/services/alertExpiry.js';
 
+// ─── IMPORT OUR NEW CRON JOB ───
+import { initCronJobs } from './src/cron.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -26,7 +29,6 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: { origin: 'http://localhost:3000', credentials: true }
- 
 });
 
 initSocket(io);
@@ -39,11 +41,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(join(__dirname, 'src/public')));
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'fallback-secret-key-for-dev', // <-- Add this line
+  secret: process.env.SESSION_SECRET || 'fallback-secret-key-for-dev', 
   resave: false,
   saveUninitialized: true
 }));
-
 
 //View engine
 app.set('view engine', 'pug');
@@ -55,7 +56,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.log(err));
 
 // Routes
-app.use('/', viewRoute); // mount BEFORE api routes
+app.use('/', viewRoute); 
 app.use('/api/auth', authRoute);
 app.use('/api/facilities', facilityRoute);
 app.use('/api/facility-keys', facilityKeyRoute);
@@ -70,3 +71,6 @@ httpServer.listen(process.env.PORT || 3000, () => {
 
 // ─── Background jobs ──────────────────────────────────
 setInterval(checkExpiredAlerts, 30 * 60 * 1000);
+
+// ─── INITIALIZE NIGHTLY FEFO SCANNER ───
+initCronJobs();

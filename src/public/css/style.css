@@ -595,15 +595,52 @@ table {
   border-top: 1px solid var(--border);
 }
 
-/* ── Prevent Mobile Table Text Wrapping ── */
-.table-wrapper {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  width: 100%;
+/* 1. FIX HOVER SCROLLBAR JUMPING */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px; /* Keep height identical on hover and non-hover */
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* Change color only, NOT size */
 }
 
+/* 2. SLICK NOTIFICATION BELL BADGE */
+.nav-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.notif-badge {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  background: var(--danger, #dc3545);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: bold;
+  padding: 2px 5px;
+  border-radius: 50%;
+  border: 2px solid white; /* Gives it the iPhone icon look */
+  min-width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+/* 3. FIX MOBILE TABLE ALIGNMENT (FORCE HORIZONTAL SCROLL) */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth iOS scrolling */
+  width: 100%;
+}
 .table-wrapper table {
-  min-width: 700px; /* Forces horizontal scroll on mobile instead of crushing text */
+  min-width: 600px; /* Forces table to stay wide instead of stacking */
+  width: 100%;
+  border-collapse: collapse;
 }
 
 /* ─── 7. RESPONSIVE BREAKPOINTS ─────────────────────────── */
@@ -687,6 +724,15 @@ table {
 
   table:not(.mobile-stack) {
     min-width: 700px; 
+  }
+
+  .table-wrapper td, .table-wrapper th {
+    display: table-cell !important;
+    text-align: left !important;
+    white-space: nowrap; /* Prevents text from squishing */
+  }
+  .table-wrapper td::before {
+    display: none !important; /* Removes the stacked card labels */
   }
 
 }

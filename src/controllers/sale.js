@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import Sale from '../models/sale.js';
 import Drug from '../models/drug.js';
-import Alert from '../models/alert.js'; // We now trigger alerts directly!
+import Alert from '../models/alert.js'; 
 import { emitAlert, getIO } from '../services/socket.js';
 
 const saleController = {
@@ -75,37 +75,9 @@ const saleController = {
           }
       }
 
-      // ── Step 5: THE DSS TRIGGER ENGINE (FEFO) ──
-      const today = new Date();
-      for (const batch of drug.batches) {
-          const daysToExpiry = Math.ceil((new Date(batch.expiry_date) - today) / (1000 * 60 * 60 * 24));
-          
-          if (daysToExpiry <= (drug.expiry_alert_days || 180) && daysToExpiry > 0) {
-              const existingFEFO = await Alert.findOne({ 
-                  type: 'FEFO', drug_id: drug._id, batch_number: batch.batch_number, status: 'pending',
-                  source_facility: req.user.facility_id, target_facility: req.user.facility_id
-              });
+      // (FEFO Check removed: Now handled by src/cron.js and inventory controller)
 
-              if (!existingFEFO) {
-                  const newAlert = await Alert.create({
-                      type: 'FEFO',
-                      drug_id: drug._id,
-                      drug_name: drug.drug_name,
-                      batch_number: batch.batch_number,
-                      expiry_date: batch.expiry_date,
-                      source_facility: req.user.facility_id,
-                      target_facility: req.user.facility_id,
-                      quantity_available: batch.quantity,
-                      status: 'pending',
-                      notes: `System generated: Batch expires in ${daysToExpiry} days.`
-                  });
-                  emitAlert(newAlert, true);
-                  alerts_created++;
-              }
-          }
-      }
-
-      // ── Step 6: Create Sale Record ──
+      // ── Step 5: Create Sale Record ──
       const sale = await Sale.create({
         facility_id:  req.user.facility_id,
         drug_id:      drug._id,
