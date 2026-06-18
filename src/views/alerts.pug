@@ -14,7 +14,6 @@ block scripts
     document.addEventListener('DOMContentLoaded', () => {
       const user = getUser();
 
-      // ─── SVG ICON LIBRARY ────────────────────────────────────
       const icons = {
         bell: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`,
         trendDown: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline></svg>`,
@@ -26,36 +25,66 @@ block scripts
         cross: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
         star: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--warning)" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
         globe: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`,
-        fire: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`
+        fire: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`,
+        hash: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`
       };
 
       const formatCompactDate = (dateString) => {
         if (!dateString) return '—';
-        const d = new Date(dateString);
-        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(d); 
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(new Date(dateString)); 
       };
 
       const formatStrictDate = (dateString) => {
         if (!dateString) return '—';
-        const d = new Date(dateString);
-        return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+        return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateString));
       };
 
-      // ─── ACCORDION TOGGLE LOGIC ──────────────────────────────
+      // ── THE RELATIVE TIME CALCULATOR (e.g. 2 weeks and 3 days left) ──
+      const getRelativeTime = (dateString) => {
+        if (!dateString) return '';
+        const now = new Date();
+        const target = new Date(dateString);
+        const diffTime = target - now;
+        
+        if (diffTime < 0) return '<span style="color:var(--danger)"> (Expired)</span>';
+        
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return ' (Expires today)';
+        if (diffDays < 7) return ` (${diffDays} days left)`;
+        
+        if (diffDays < 30) {
+            const weeks = Math.floor(diffDays/7);
+            const days = diffDays%7;
+            return ` (${weeks} week${weeks>1?'s':''} ${days>0 ? `and ${days} day${days>1?'s':''} ` : ''}left)`;
+        }
+        
+        const diffMonths = Math.floor(diffDays / 30);
+        const remDays = diffDays % 30;
+        const remWeeks = Math.floor(remDays/7);
+        if (diffMonths < 12) {
+            return ` (${diffMonths} month${diffMonths>1?'s':''}${remWeeks>0 ? ` and ${remWeeks} week${remWeeks>1?'s':''}` : ''} left)`;
+        }
+        
+        const diffYears = Math.floor(diffMonths / 12);
+        return ` (${diffYears} year${diffYears>1?'s':''} left)`;
+      };
+
+      // ── ACCORDION TOGGLE ──
       window.toggleAccordion = (element, event) => {
         event.stopPropagation(); 
         const accordion = element.closest('.alert-accordion');
         const wasExpanded = accordion.classList.contains('expanded');
-        
         document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
-        
         if (!wasExpanded) accordion.classList.add('expanded');
       };
 
+      // ── BUG FIX: Prevent Modal Clicks from Closing Accordion ──
       document.addEventListener('click', (e) => {
-        if (!e.target.closest('.alert-accordion')) {
-          document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
+        // If clicking inside an accordion or inside ANY open modal, do nothing
+        if (e.target.closest('.alert-accordion') || e.target.closest('.modal-backdrop')) {
+            return; 
         }
+        document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
       });
 
       const loadAlerts = () => {
@@ -79,9 +108,7 @@ block scripts
               const sourceStr   = a.source_facility && a.source_facility._id ? String(a.source_facility._id) : '';
               const targetStr   = a.target_facility && a.target_facility._id ? String(a.target_facility._id) : '';
               
-              // THE BUG FIX: Forces internal alerts to strictly follow internal UI logic
               const isSelfAlert = !a.isTransfer; 
-              
               const isSource    = sourceStr === myFacStr;
               const isTarget    = targetStr === myFacStr;
 
@@ -89,35 +116,36 @@ block scripts
               let previewText = '';
               let detailsHtml = '';
 
-              // ─── DYNAMIC PREVIEW & DETAILS LOGIC ───
               if (isSelfAlert) {
-                  // INTERNAL DSS ALERT (ROP/FEFO)
+                  // ROP ALERT
                   if (a.type === 'ROP') {
                       previewText = `Low Stock — Only ${a.quantity_available || 0} left`;
                       detailsHtml += `<div class="detail-item">${icons.box} <strong>Your Stock:</strong>&nbsp;${a.quantity_available || 0} units</div>`;
                       detailsHtml += `<div class="detail-item">${icons.trendDown} <strong>Suggested Reorder:</strong>&nbsp;${a.quantity_needed} units</div>`;
                       
-                      // THE REQUEST BUTTON IS HERE!
                       if (a.status === 'pending') {
-                          actions += `<button class="btn btn-primary btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_needed}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
-                          actions += `<button class="btn btn-ghost btn-sm" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
+                          // Buttons styled with new alert-action-btn class
+                          actions += `<button class="btn btn-primary alert-action-btn" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_needed}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
+                          actions += `<button class="btn btn-ghost alert-action-btn" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
                       }
                   } else {
+                      // FEFO ALERT (Batch goes here!)
                       previewText = `Expiring — ${a.quantity_available || 0} units expiring soon`;
                       detailsHtml += `<div class="detail-item">${icons.box} <strong>Expiring Stock:</strong>&nbsp;${a.quantity_available || 0} units</div>`;
-                      detailsHtml += `<div class="detail-item">${icons.calendar} <strong>Expiry Date:</strong>&nbsp;${formatStrictDate(a.expiry_date)}</div>`;
+                      detailsHtml += `<div class="detail-item">${icons.calendar} <strong>Expiry Date:</strong>&nbsp;${formatStrictDate(a.expiry_date)} <span style="font-size:0.8rem; color:var(--text-muted);">${getRelativeTime(a.expiry_date)}</span></div>`;
                       
+                      // BATCH ONLY RENDERS FOR FEFO
                       if (a.batch_number) {
-                          detailsHtml += `<div class="detail-item"><strong>Batch No:</strong>&nbsp;${a.batch_number}</div>`;
+                          detailsHtml += `<div class="detail-item">${icons.hash} <strong>Batch No:</strong>&nbsp;${a.batch_number}</div>`;
                       }
                       
                       if (a.status === 'pending') {
-                          actions += `<button class="btn btn-warning btn-sm" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_available}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
-                          actions += `<button class="btn btn-ghost btn-sm" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
+                          actions += `<button class="btn btn-warning alert-action-btn" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_available}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
+                          actions += `<button class="btn btn-ghost alert-action-btn" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
                       }
                   }
               } else {
-                  // NETWORK TRANSFER BETWEEN FACILITIES
+                  // NETWORK TRANSFER
                   if (a.status === 'pending') {
                       previewText = isSource ? `Transfer request from ${a.target_facility?.name}` : `Awaiting response from ${a.source_facility?.name}`;
                   } else if (a.status === 'confirmed') {
@@ -132,18 +160,17 @@ block scripts
                   detailsHtml += `<div class="detail-item">${icons.box} <strong>Quantity Agreed:</strong>&nbsp;${a.quantity_needed || a.quantity_available} units</div>`;
 
                   if (a.status === 'pending' && isSource) {
-                      actions += `<button class="btn btn-success btn-sm" onclick="doAlert('${a._id}','confirm')">${icons.check} Accept Transfer</button>`;
-                      actions += `<button class="btn btn-danger btn-sm" onclick="doAlert('${a._id}','decline')">${icons.cross} Decline</button>`;
+                      actions += `<button class="btn btn-success alert-action-btn" onclick="doAlert('${a._id}','confirm')">${icons.check} Accept Transfer</button>`;
+                      actions += `<button class="btn btn-danger alert-action-btn" onclick="doAlert('${a._id}','decline')">${icons.cross} Decline</button>`;
                   }
                   if (a.status === 'confirmed' && isSource) {
-                      actions += `<button class="btn btn-primary btn-sm" onclick="doAlert('${a._id}','dispatch')">${icons.box} Mark Dispatched</button>`;
+                      actions += `<button class="btn btn-primary alert-action-btn" onclick="doAlert('${a._id}','dispatch')">${icons.box} Mark Dispatched</button>`;
                   }
                   if (a.status === 'dispatched' && isTarget) {
-                      actions += `<button class="btn btn-success btn-sm" onclick="resolveWithBatch('${a._id}')">${icons.check} Confirm Receipt (Update Inventory)</button>`;
+                      actions += `<button class="btn btn-success alert-action-btn" onclick="resolveWithBatch('${a._id}')">${icons.check} Confirm Receipt (Auto-Update Inventory)</button>`;
                   }
               }
 
-              // Determine styling class
               const borderClass = a.isTransfer ? 'type-Transfer' : `type-${a.type}`;
               const pillBadge = a.isTransfer 
                 ? `<span class="badge-pill" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">TRANSFER</span>` 
@@ -172,7 +199,7 @@ block scripts
                     
                     ${a.notes ? `<div style="font-size:0.85rem; color:#4a5568; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 6px;">${icons.note} <strong>System Note:</strong> ${a.notes}</div>` : ''}
                     
-                    ${actions ? `<div class="alert-card-footer" style="margin-top: 0; padding-top: 15px; border-top: 1px dashed #e2e8f0;">${actions}</div>` : ''}
+                    ${actions ? `<div class="alert-card-footer">${actions}</div>` : ''}
                   </div>
                 </div>
               `;
@@ -197,9 +224,7 @@ block scripts
       };
 
       const doAlert = async (id, action) => {
-        const body = action === 'dispatch'     ? { notes: 'Drugs dispatched' }
-                  : action === 'self-resolve' ? { notes: 'Resolved externally' }
-                  : {};
+        const body = action === 'dispatch' ? { notes: 'Drugs dispatched' } : action === 'self-resolve' ? { notes: 'Resolved externally' } : {};
         const res  = await fetch(`/api/alerts/${id}/${action}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -211,9 +236,7 @@ block scripts
         else showError(data.message || 'Action failed');
       };
 
-      // ─── THE SMART NETWORK MATCHER MODAL ─────────────────────
       window.openNetworkModal = async (drugId, drugName, defaultQty, transactionType, alertType) => {
-        
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop';
         modal.style.display = 'flex';
@@ -221,7 +244,7 @@ block scripts
         <div class="modal-box" style="max-width:750px; border-top: 4px solid #0052CC;">
             <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
                 <h3 style="color: #333;">Fetching Network Matches...</h3>
-                <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+                <button class="modal-close" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">${icons.cross}</button>
             </div>
             <div class="modal-body" style="padding: 30px 0; text-align: center;">
                 <div class="spinner" style="margin: 0 auto;"></div>
@@ -239,13 +262,11 @@ block scripts
             if (!res.ok) throw new Error(responseData.message);
 
             const { priorityMatches, recommended, openNetwork } = responseData.data;
-            
             const inputType = alertType === 'ROP' ? 'checkbox' : 'radio';
             const instructionText = alertType === 'ROP' 
                 ? 'Select one or more facilities to request stock from. The first to confirm will fulfill the order.' 
                 : 'Select ONE facility to offer your discounted stock to prevent double-selling.';
 
-            // Clean, responsive list builder
             const buildList = (facilities, isPriority = false) => facilities.map(f => `
                 <div class="network-match-card ${isPriority ? 'priority-match-card' : ''}">
                     <input type="${inputType}" name="facilitySelection" value="${f.facilityId}" id="fac-${f.facilityId}" data-type="${f.transactionType}" class="network-match-checkbox">
@@ -261,7 +282,7 @@ block scripts
             modalBox.innerHTML = `
                 <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
                     <h3 style="color: #333;">Confirm Transaction Details</h3>
-                    <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+                    <button class="modal-close" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">${icons.cross}</button>
                 </div>
                 
                 <div class="modal-body" style="padding: 15px 0; max-height: 60vh; overflow-y: auto;">
@@ -299,22 +320,20 @@ block scripts
                 <div id="transfer-result"></div>
                 
                 <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px;">
-                    <button class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
+                    <button class="btn btn-ghost" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">Cancel</button>
                     <button class="btn btn-success" style="width: 100%; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
                 </div>
             `;
-
         } catch (err) {
             modal.querySelector('.modal-body').innerHTML = `<div class="flash flash-error">${err.message || 'Failed to fetch network directory.'}</div>`;
         }
       };
 
-      // ─── BATCH TRANSMIT LOGIC ────────────────────────────────
       window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
         const resultDiv = document.getElementById('transfer-result');
         const unit = document.getElementById('draft-unit').value;
-        
         const selectedInputs = document.querySelectorAll('input[name="facilitySelection"]:checked');
+        
         if (selectedInputs.length === 0) {
             resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.warning} Please select at least one facility.</div>`;
             return;
@@ -327,7 +346,6 @@ block scripts
             const promises = Array.from(selectedInputs).map(async (input) => {
                 const targetFacId = input.value;
                 const dynamicTxType = input.getAttribute('data-type'); 
-                
                 const draftRes = await fetch('/api/alerts/transfer/draft', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -366,7 +384,6 @@ block scripts
         }
       };
 
-      // ─── RESOLUTION LOGIC ────────────────────────────────────
       window.resolveWithBatch = (id) => {
         const modal = document.createElement('div');
         modal.className = 'modal-backdrop';
@@ -375,18 +392,18 @@ block scripts
           <div class="modal-box" style="max-width:420px">
             <div class="modal-header">
               <h3>Confirm Receipt</h3>
-              <button class="modal-close" onclick="this.closest('.modal-backdrop').remove()">${icons.cross}</button>
+              <button class="modal-close" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">${icons.cross}</button>
             </div>
             <p style="font-size:0.875rem;color:#8492a6;margin-bottom:1rem">
-              Enter the batch number you added to your inventory after receiving the drugs.
+              Optional: Enter a specific batch number, or leave blank to auto-generate one.
             </p>
             <div class="form-group">
-              <label>Batch Number</label>
-              <input class="form-control" id="resolve-batch" placeholder="e.g LGH-BATCH001" />
+              <label>Batch Number (Optional)</label>
+              <input class="form-control" id="resolve-batch" placeholder="e.g. Leave blank for Auto-Batch" />
             </div>
             <div id="resolve-result"></div>
             <div class="modal-footer">
-              <button class="btn btn-ghost" onclick="this.closest('.modal-backdrop').remove()">Cancel</button>
+              <button class="btn btn-ghost" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">Cancel</button>
               <button class="btn btn-success" onclick="submitResolve('${id}', this)">${icons.check} Mark Received</button>
             </div>
           </div>`;
@@ -394,13 +411,9 @@ block scripts
       };
 
       window.submitResolve = async (id, btn) => {
-        const batch_number = document.getElementById('resolve-batch').value.trim();
-        const result       = document.getElementById('resolve-result');
-
-        if (!batch_number) {
-          result.innerHTML = '<div class="flash flash-error" style="margin-top:0.5rem">Batch number is required</div>';
-          return;
-        }
+        // If left blank, backend handles auto-generation.
+        const batch_number = document.getElementById('resolve-batch').value.trim(); 
+        const result = document.getElementById('resolve-result');
 
         btn.disabled = true;
         btn.textContent = 'Saving...';
@@ -423,7 +436,6 @@ block scripts
         }
       };
 
-      // SMART REFRESH
       setInterval(() => {
         const isInteracting = document.querySelector('.alert-accordion.expanded') || document.querySelector('.modal-backdrop');
         if (!isInteracting) loadAlerts();

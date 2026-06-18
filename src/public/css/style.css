@@ -511,6 +511,101 @@ tbody tr:hover td { background: var(--page-bg); }
   max-width: 80px; line-height: 1.2;
 }
 
+/* ── NEW: Alert Action Buttons (Wide & Spaced) ── */
+.alert-action-btn {
+  flex: 1; /* Makes buttons take up equal, wide space */
+  justify-content: center;
+  padding: 0.85rem;
+  font-size: 0.95rem;
+  border-radius: var(--radius-sm);
+}
+
+.alert-card-footer {
+  display: flex;
+  gap: 1rem; /* Nice spacing between buttons */
+  margin-top: 0;
+  padding-top: 15px;
+  border-top: 1px dashed #e2e8f0;
+  flex-wrap: wrap; /* Allows stacking on very small phones */
+}
+
+table {
+  min-width: 600px; /* Forces table to stay wide and scrollable on mobile */
+}
+
+/* ─── BATCH ACCORDIONS (INVENTORY UI) ───────────────────── */
+.batch-accordion {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.batch-accordion.fefo-warning {
+  border-left-color: var(--danger);
+  background: #fffafa;
+}
+
+.batch-header {
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.batch-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.batch-id {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.batch-qty {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.batch-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.batch-body {
+  padding: 0 1.25rem;
+  max-height: 0;
+  overflow: hidden;
+  background: #fafbff;
+  transition: max-height 0.3s ease-out, padding 0.3s ease;
+}
+
+.batch-accordion.expanded .batch-body {
+  padding: 1.25rem;
+  max-height: 500px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Prevent Mobile Table Text Wrapping ── */
+.table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+.table-wrapper table {
+  min-width: 700px; /* Forces horizontal scroll on mobile instead of crushing text */
+}
+
 /* ─── 7. RESPONSIVE BREAKPOINTS ─────────────────────────── */
 
 /* TABLET — max-width: 1024px */
@@ -584,6 +679,16 @@ tbody tr:hover td { background: var(--page-bg); }
     grid-template-columns: 1fr; /* Forces stacking on mobile so it doesn't break */
     gap: 10px;
   }
+
+  /* Only stack tables if explicitly told to via .mobile-stack */
+  table:not(.mobile-stack) {
+    min-width: 650px;
+  }
+
+  table:not(.mobile-stack) {
+    min-width: 700px; 
+  }
+  
 }
 
 /* SMALL MOBILE — max-width: 480px */

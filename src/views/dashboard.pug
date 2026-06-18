@@ -10,22 +10,22 @@ block content
         .stat-number#total-drugs 0
         .stat-label Total Drugs
 
-    a.stat-card(href='/inventory' style='text-decoration:none;cursor:pointer')
+    a.stat-card(href='/inventory?filter=low_stock' style='text-decoration:none;cursor:pointer')
       .stat-icon.red
         svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='22' height='22')
           polyline(points='22 12 18 12 15 21 9 3 6 12 2 12')
       .stat-info
         .stat-number#low-stock 0
-        .stat-label Low Stock
+        .stat-label Low Stock (ROP)
 
-    a.stat-card(href='/inventory' style='text-decoration:none;cursor:pointer')
+    a.stat-card(href='/inventory?filter=expiring' style='text-decoration:none;cursor:pointer')
       .stat-icon.orange
         svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' width='22' height='22')
           circle(cx='12' cy='12' r='10')
           polyline(points='12 6 12 12 16 14')
       .stat-info
         .stat-number#expiring 0
-        .stat-label Expiring Soon
+        .stat-label Expiring Soon (FEFO)
 
     a.stat-card(href='/sales' style='text-decoration:none;cursor:pointer')
       .stat-icon.green
@@ -38,38 +38,45 @@ block content
         .stat-label Sales Today
 
   .grid-2
-  .card
-    .card-title
-      span Recent Sales
-      a.btn.btn-sm.btn-ghost(href='/sales') View All
-    .table-wrapper
-      table.mobile-stack
-        thead
-          tr
-            th Drug
-            th Quantity Sold
-            th ROP Alert
-            th Time
-        tbody#recent-sales
-          tr
-            td(colspan='4')
-              .loader
-                .spinner
-                |  Loading...
+    .card
+      .card-title
+        span Recent Sales
+        a.btn.btn-sm.btn-ghost(href='/sales') View All
+      .table-wrapper
+        table.mobile-stack
+          thead
+            tr
+              th Drug
+              th Quantity Sold
+              th ROP Alert
+              th Time
+          tbody#recent-sales
+            tr
+              td(colspan='4')
+                .loader
+                  .spinner
+                  |  Loading...
 
-  .card
-    .card-title
-      span Active Alerts
-      a.btn.btn-sm.btn-ghost(href='/alerts') View All
-    #recent-alerts
-      .loader
-        .spinner
-        |  Loading...
+    .card
+      .card-title
+        span Active Alerts
+        a.btn.btn-sm.btn-ghost(href='/alerts') View All
+      #recent-alerts
+        .loader
+          .spinner
+          |  Loading...
 
 block scripts
   script.
     document.addEventListener('DOMContentLoaded', () => {
 
+      // ─── HELPER: DATE FORMATTER ───
+      const formatCompactDate = (dateString) => {
+        if (!dateString) return '—';
+        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(new Date(dateString)); 
+      };
+
+      // ─── FETCH INVENTORY STATS ───
       fetch('/api/inventory', { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
@@ -78,9 +85,9 @@ block scripts
 
           const lowStock = drugs.filter(d => d.total_quantity <= d.reorder_point).length;
           const expiring = drugs.filter(d => {
-            if (!d.batches.length) return false;
+            if (!d.batches || !d.batches.length) return false;
             const days = Math.ceil((new Date(d.batches[0].expiry_date) - today) / 86400000);
-            return days > 0 && days <= d.expiry_alert_days;
+            return days > 0 && days <= (d.expiry_alert_days || 180); // Default 180 days if not set
           }).length;
 
           countUp(document.getElementById('total-drugs'), drugs.length);
@@ -88,6 +95,7 @@ block scripts
           countUp(document.getElementById('expiring'),    expiring);
         });
 
+      // ─── FETCH RECENT SALES ───
       fetch('/api/sales', { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
@@ -112,6 +120,7 @@ block scripts
           `).join('');
         });
 
+      // ─── FETCH RECENT ALERTS (DSS WIDGET) ───
       fetch('/api/alerts', { credentials: 'include' })
         .then(r => r.json())
         .then(data => {
@@ -119,23 +128,46 @@ block scripts
           const wrapper = document.getElementById('recent-alerts');
 
           if (!alerts.length) {
-            wrapper.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🔔</div><p>No active alerts</p></div>`;
+            wrapper.innerHTML = `<div class="empty-state"><div class="empty-state-icon" style="color: #a0aec0;">🔔</div><p>No active alerts</p></div>`;
             return;
           }
 
-          wrapper.innerHTML = alerts.slice(0, 3).map(a => `
-            <div class="alert-card ${a.type}">
-              <div class="alert-card-header">
-                <span class="alert-card-title">${a.type} — ${a.drug_name}</span>
-                <span class="badge badge-${a.status}">${a.status}</span>
-              </div>
-              <div class="alert-card-body">
-                ${a.type === 'ROP'
-                  ? `Needs <strong>${a.quantity_needed}</strong> units`
-                  : `<strong>${a.quantity_available}</strong> units expiring ${new Date(a.expiry_date).toLocaleDateString()}`
-                }
-              </div>
-            </div>
-          `).join('');
+          // Renders the exact same sleek accordion header used on the Alerts page, but clickable to route there!
+          wrapper.innerHTML = alerts.slice(0, 3).map(a => {
+              const isSelfAlert = !a.isTransfer; 
+              let previewText = '';
+              
+              if (isSelfAlert) {
+                  if (a.type === 'ROP') previewText = `Low Stock — Only ${a.quantity_available || 0} left`;
+                  else previewText = `Expiring — ${a.quantity_available || 0} units expiring soon`;
+              } else {
+                  if (a.status === 'pending') previewText = 'Pending Network Transfer';
+                  else if (a.status === 'confirmed') previewText = 'Transfer agreed — awaiting dispatch';
+                  else if (a.status === 'dispatched') previewText = 'Drugs dispatched — awaiting receipt';
+                  else previewText = a.notes || 'Status updated';
+              }
+
+              const borderClass = a.isTransfer ? 'type-Transfer' : `type-${a.type}`;
+              const pillBadge = a.isTransfer 
+                ? `<span class="badge-pill" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">TRANSFER</span>` 
+                : (a.type === 'ROP' ? `<span class="badge-pill badge-rop-pill">ROP</span>` : `<span class="badge-pill badge-fefo-pill">FEFO</span>`);
+
+              return `
+                <div class="alert-accordion ${borderClass}" style="margin-bottom: 0.85rem; cursor: pointer; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.05);" onclick="window.location.href='/alerts'" onmouseover="this.style.transform='translateX(2px)'" onmouseout="this.style.transform='translateX(0)'">
+                  <div class="alert-header" style="padding: 1rem 1.25rem;">
+                    <div class="alert-header-top">
+                      <span class="drug-name">${a.drug_name || '—'}</span>
+                      <span class="alert-date">${formatCompactDate(a.created_at)}</span>
+                    </div>
+                    <div class="alert-header-bottom">
+                      <span class="alert-preview">${previewText}</span>
+                      <div class="alert-badges">
+                        ${pillBadge}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              `;
+          }).join('');
         });
     });
