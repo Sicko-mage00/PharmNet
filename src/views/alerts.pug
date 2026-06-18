@@ -321,7 +321,7 @@ block scripts
                 
                 <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px;">
                     <button class="btn btn-ghost" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">Cancel</button>
-                    <button class="btn btn-success" style="width: 100%; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
+                    <button class="btn btn-success" style="width: fit-content; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
                 </div>
             `;
         } catch (err) {

@@ -7,6 +7,7 @@ const batchSchema = new mongoose.Schema({
   quantity:      { type: Number, required: true, min: 0 },
   expiry_date:   { type: Date,   required: true },
   unit_price:    { type: Number, min: 0 },
+  barcode:       { type: String, trim: true }, // <--- ADDED THIS FIELD FOR BATCH-SPECIFIC 2D BARCODES
   received_date: { type: Date,   default: Date.now },
 },
 { _id: false });
@@ -21,7 +22,7 @@ const drugSchema = new mongoose.Schema({
 
   drug_name:    { type: String, required: true, trim: true },
   generic_name: { type: String, trim: true },
-  barcode:      { type: String, sparse: true, trim: true, index: true },
+  barcode:      { type: String, sparse: true, trim: true, index: true }, // General UPC barcode
   unit:         { type: String, default: 'tablet' },
   category:     { type: String, trim: true },
 
@@ -36,7 +37,6 @@ const drugSchema = new mongoose.Schema({
   // Alert fires if any batch expires within this many days
   expiry_alert_days: { type: Number, default: 90 },
   
-
   isActive: { type: Boolean, default: true },
 },
 {
@@ -56,6 +56,7 @@ drugSchema.pre('save', function (next) {
   } else {
     this.total_quantity = 0;
   }
+  next(); // <--- Made sure to add next() here so Mongoose doesn't hang!
 });
 
 // First element is always nearest expiry after sort

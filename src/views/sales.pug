@@ -2,48 +2,150 @@ extends layout
 
 block content
   .page-header
-    h2.page-title Sales History
-    a.btn.btn-primary(href='/sales/new') + Record Sale
+    h2.page-title Sales & Dispensing
+    
+  //- RECORD NEW SALE FORM
+  .card(style="margin-bottom: 2rem; border-top: 4px solid var(--success);")
+    .card-title Record Dispensed Drug
+    form#record-sale-form
+      .form-row
+        .form-group
+          label Select Drug
+          select.form-control#drug_select(required)
+            option(value='') Loading drugs...
+        .form-group
+          label Quantity Dispensed
+          input.form-control(type='number' id='quantity_sold' min='1' placeholder='e.g 2' required)
+      .form-row
+        .form-group
+          label Unit Price (₦) - Optional
+          input.form-control(type='number' id='unit_price' placeholder='e.g 500')
+        .form-group
+          label Patient Ref/Prescription ID (Optional)
+          input.form-control(type='text' id='patient_ref' placeholder='e.g PT-8819')
+      
+      #sale-result
+      button.btn.btn-success(type='submit' style="width:100%; justify-content:center; padding:0.85rem;") Complete Sale
 
+  //- SALES HISTORY TABLE
   .card
+    .card-title Sales History
     .table-wrapper
       table
         thead
           tr
-            th Drug
+            th Date & Time
+            th Drug Name
             th Qty Sold
-            th Batch
-            th Price
-            th ROP Alert
-            th FEFO Alert
-            th Date
+            th Batch Used
+            th System Alert
+            th Dispensed By
         tbody#sales-table
           tr
-            td(colspan='7' style='text-align:center;color:#6c757d') Loading...
+            td(colspan='6' style='text-align:center;color:#6c757d')
+              .loader
+                .spinner
+                |  Loading...
 
 block scripts
   script.
+    document.addEventListener('DOMContentLoaded', () => {
 
-    fetch('/api/sales', { credentials: 'include' })
-    .then(r => r.json())
-    .then(data => {
-      const sales = data.sales || [];
-      const tbody = document.getElementById('sales-table');
+      // ── Populate Drug Dropdown ──
+      fetch('/api/inventory', { credentials: 'include' })
+        .then(r => r.json())
+        .then(data => {
+            const select = document.getElementById('drug_select');
+            if(!data.drugs || data.drugs.length === 0) {
+                select.innerHTML = '<option value="">No drugs available</option>';
+                return;
+            }
+            select.innerHTML = '<option value="">-- Select Drug --</option>' + data.drugs.map(d => 
+                `<option value="${d._id}">${d.drug_name} (Stock: ${d.total_quantity} ${d.unit})</option>`
+            ).join('');
+        });
 
-      if (!sales.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6c757d">No sales yet</td></tr>';
-        return;
-      }
+      // ── Load Sales History ──
+      const loadSales = () => {
+          fetch('/api/sales', { credentials: 'include' })
+          .then(r => r.json())
+          .then(data => {
+            const sales = data.sales || [];
+            const tbody = document.getElementById('sales-table');
 
-      tbody.innerHTML = sales.map(s => `
-        <tr>
-          <td><strong>${s.snapshot.drug_name}</strong></td>
-          <td>${s.quantity_sold}</td>
-          <td>${s.batch_number || '—'}</td>
-          <td>₦${s.unit_price || '—'}</td>
-          <td><span class="badge ${s.snapshot.rop_triggered ? 'badge-declined' : 'badge-resolved'}">${s.snapshot.rop_triggered ? 'Yes' : 'No'}</span></td>
-          <td><span class="badge ${s.snapshot.fefo_triggered ? 'badge-warning' : 'badge-resolved'}">${s.snapshot.fefo_triggered ? 'Yes' : 'No'}</span></td>
-          <td>${new Date(s.created_at).toLocaleString()}</td>
-        </tr>
-      `).join('');
+            if (!sales.length) {
+              tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No sales recorded yet.</p></div></td></tr>';
+              return;
+            }
+
+            tbody.innerHTML = sales.map(s => {
+              const drugName = s.snapshot?.drug_name || s.drug_id?.drug_name || 'Unknown Drug';
+              const soldBy = s.sold_by ? `${s.sold_by.firstName} ${s.sold_by.lastName}` : 'System';
+              const timeStr = isNaN(new Date(s.created_at).getTime()) ? '—' : new Date(s.created_at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+              const ropTriggered = s.snapshot?.rop_triggered || false;
+              
+              return `
+                <tr>
+                  <td data-label="Time" style="white-space:nowrap; color:#4a5568;">${timeStr}</td>
+                  <td data-label="Drug"><strong>${drugName}</strong></td>
+                  <td data-label="Qty Sold"><strong>${s.quantity_sold}</strong></td>
+                  <td data-label="Batch"><span style="font-family:monospace; font-size:0.85rem;">${s.batch_number || '—'}</span></td>
+                  <td data-label="Alert"><span class="badge ${ropTriggered ? 'badge-low' : 'badge-ok'}">${ropTriggered ? 'ROP Triggered' : 'Normal'}</span></td>
+                  <td data-label="Staff">${soldBy}</td>
+                </tr>
+              `;
+            }).join('');
+          })
+          .catch(err => {
+              document.getElementById('sales-table').innerHTML = '<tr><td colspan="6"><div class="flash flash-error">Failed to load sales history.</div></td></tr>';
+          });
+      };
+
+      loadSales();
+
+      // ── Handle Record Sale Form ──
+      document.getElementById('record-sale-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        const resultDiv = document.getElementById('sale-result');
+        
+        btn.textContent = 'Processing...';
+        btn.disabled = true;
+
+        const body = {
+          drug_id: document.getElementById('drug_select').value,
+          quantity_sold: parseInt(document.getElementById('quantity_sold').value),
+          unit_price: parseFloat(document.getElementById('unit_price').value) || null,
+          patient_ref: document.getElementById('patient_ref').value || ''
+        };
+
+        try {
+          const res = await fetch('/api/sales', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body),
+          });
+          const data = await res.json();
+
+          if (res.ok) {
+            resultDiv.innerHTML = `<div class="flash flash-success" style="margin-bottom:1rem;">✓ Sale recorded! ${data.alerts_triggered > 0 ? '(DSS Alerts Triggered)' : ''}</div>`;
+            document.getElementById('record-sale-form').reset();
+            loadSales(); 
+            
+            fetch('/api/inventory', { credentials: 'include' }).then(r => r.json()).then(invData => {
+                 document.getElementById('drug_select').innerHTML = '<option value="">-- Select Drug --</option>' + invData.drugs.map(d => 
+                    `<option value="${d._id}">${d.drug_name} (Stock: ${d.total_quantity} ${d.unit})</option>`
+                 ).join('');
+            });
+          } else {
+            resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:1rem;">${data.message || 'Failed to record sale'}</div>`;
+          }
+        } catch (err) {
+          resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:1rem;">Something went wrong.</div>`;
+        } finally {
+          btn.textContent = 'Complete Sale';
+          btn.disabled = false;
+        }
+      });
     });

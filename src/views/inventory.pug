@@ -2,12 +2,13 @@ extends layout
 
 block content
   .page-header
-    h2.page-title Inventory
+    h2.page-title#inventory-title Inventory
     a.btn.btn-primary(href='/inventory/add') + Add Drug
 
   .card
     .table-wrapper
-      table.mobile-stack
+      //- Removed .mobile-stack to force sleek horizontal scrolling on phones
+      table
         thead
           tr
             th Drug Name
@@ -19,37 +20,75 @@ block content
             th Actions
         tbody#inventory-table
           tr
-            td(colspan='7' style='text-align:center;color:#6c757d') Loading...
+            td(colspan='7' style='text-align:center;color:#6c757d')
+              .loader
+                .spinner
+                |  Loading...
 
 block scripts
   script.
+    document.addEventListener('DOMContentLoaded', () => {
+      
+      const formatStrictDate = (dateString) => {
+        if (!dateString) return '—';
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '—';
+        return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
+      };
 
-    fetch('/api/inventory', { credentials: 'include' })
-    .then(r => r.json())
-    .then(data => {
-      const drugs = data.drugs || [];
-      const tbody = document.getElementById('inventory-table');
+      // ── CHECK FOR DASHBOARD FILTERS ──
+      const urlParams = new URLSearchParams(window.location.search);
+      const filter = urlParams.get('filter');
+      
+      if (filter === 'low_stock') document.getElementById('inventory-title').textContent = 'Inventory (Low Stock)';
+      if (filter === 'expiring') document.getElementById('inventory-title').textContent = 'Inventory (Expiring Soon)';
 
-      if (!drugs.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6c757d">No drugs in inventory</td></tr>';
-        return;
-      }
+      fetch('/api/inventory', { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        let drugs = data.drugs || [];
+        const today = new Date();
 
-      tbody.innerHTML = drugs.map(d => {
-        const nearest = d.batches.length
-          ? new Date(d.batches[0].expiry_date).toLocaleDateString('en-NG')
-          : 'N/A';
-        const isLow = d.total_quantity <= d.reorder_point;
-        return `
-          <tr>
-            <td data-label="Drug"><strong>${d.drug_name}</strong><br><small style="color:#8492a6">${d.generic_name || ''}</small></td>
-            <td data-label="Category">${d.category || '—'}</td>
-            <td data-label="Stock" style="color:${isLow ? 'var(--danger)' : 'var(--success)'};font-weight:600">${d.total_quantity} ${d.unit}</td>
-            <td data-label="Reorder Point">${d.reorder_point}</td>
-            <td data-label="Nearest Expiry">${nearest}</td>
-            <td data-label="Status"><span class="badge ${isLow ? 'badge-low' : 'badge-ok'}">${isLow ? 'Low Stock' : 'OK'}</span></td>
-            <td data-label="Action"><a href="/inventory/${d._id}" class="btn btn-sm btn-primary">View</a></td>
-          </tr>
-        `;
-      }).join('');
-    });   
+        // ── APPLY THE FILTERS ──
+        if (filter === 'low_stock') {
+            drugs = drugs.filter(d => d.total_quantity <= d.reorder_point);
+        } else if (filter === 'expiring') {
+            drugs = drugs.filter(d => {
+                if (!d.batches || !d.batches.length) return false;
+                const dDate = new Date(d.batches[0].expiry_date);
+                if (isNaN(dDate.getTime())) return false;
+                const days = Math.ceil((dDate - today) / 86400000);
+                return days > 0 && days <= (d.expiry_alert_days || 180);
+            });
+        }
+
+        const tbody = document.getElementById('inventory-table');
+
+        if (!drugs.length) {
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>No drugs found matching this criteria.</p></div></td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = drugs.map(d => {
+          const nearest = d.batches && d.batches.length
+            ? formatStrictDate(d.batches[0].expiry_date)
+            : 'N/A';
+          const isLow = d.total_quantity <= d.reorder_point;
+          
+          return `
+            <tr>
+              <td data-label="Drug"><strong>${d.drug_name}</strong><br><small style="color:#8492a6">${d.generic_name || ''}</small></td>
+              <td data-label="Category">${d.category || '—'}</td>
+              <td data-label="Stock" style="color:${isLow ? 'var(--danger)' : 'var(--success)'};font-weight:600">${d.total_quantity} ${d.unit}</td>
+              <td data-label="Reorder Point">${d.reorder_point}</td>
+              <td data-label="Nearest Expiry">${nearest}</td>
+              <td data-label="Status"><span class="badge ${isLow ? 'badge-low' : 'badge-ok'}">${isLow ? 'Low Stock' : 'OK'}</span></td>
+              <td data-label="Action"><a href="/inventory/${d._id}" class="btn btn-sm btn-primary">View</a></td>
+            </tr>
+          `;
+        }).join('');
+      })
+      .catch(err => {
+        document.getElementById('inventory-table').innerHTML = '<tr><td colspan="7"><div class="flash flash-error">Failed to load inventory</div></td></tr>';
+      });
+    });

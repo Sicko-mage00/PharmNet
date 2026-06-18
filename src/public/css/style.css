@@ -644,8 +644,8 @@ table {
   .stat-card { padding: 1rem; }
   .stat-number { font-size: 1.4rem; }
   .stat-icon { width: 38px; height: 38px; font-size: 1rem; }
-  .alert-card-footer { flex-direction: column; }
-  .alert-card-footer .btn { width: 100%; justify-content: center; }
+  .alert-card-footer { flex-direction: column; width: fit-content; }
+  .alert-card-footer .btn { justify-content: center; }
 
   /* Profile & Auth */
   .profile-card { max-width: 100%; }
@@ -688,7 +688,7 @@ table {
   table:not(.mobile-stack) {
     min-width: 700px; 
   }
-  
+
 }
 
 /* SMALL MOBILE — max-width: 480px */
