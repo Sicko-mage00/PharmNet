@@ -35,7 +35,8 @@ const checkAndTriggerAlerts = async (drug, facility_id) => {
     for (const batch of drug.batches) {
         const daysToExpiry = Math.ceil((new Date(batch.expiry_date) - today) / (1000 * 60 * 60 * 24));
         
-        if (daysToExpiry <= (drug.expiry_alert_days || 180) && daysToExpiry > 0) {
+        // BUG FIX: Removed "> 0" so it triggers instantly for expired batches added manually
+        if (daysToExpiry <= (drug.expiry_alert_days || 180)) {
             const existingFEFO = await Alert.findOne({ 
                 type: 'FEFO', drug_id: drug._id, batch_number: batch.batch_number, 
                 status: 'pending', source_facility: facility_id 
@@ -52,7 +53,10 @@ const checkAndTriggerAlerts = async (drug, facility_id) => {
                     target_facility: facility_id,
                     quantity_available: batch.quantity,
                     status: 'pending',
-                    notes: `System generated: Batch expires in ${daysToExpiry} days.`
+                    // BUG FIX: Dynamic notes specifically for expired vs expiring
+                    notes: daysToExpiry <= 0 
+                        ? `System generated: Batch EXPIRED!` 
+                        : `System generated: Batch expires in ${daysToExpiry} days.`
                 });
                 emitAlert(newAlert, true);
                 alerts_created++;
@@ -64,113 +68,130 @@ const checkAndTriggerAlerts = async (drug, facility_id) => {
 
 const inventoryController = {
 
-  // ─── ADD DRUG ──────────────────────────────────────────
-  addDrug: async (req, res) => {
-    try {
-      const {
-            drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days,
-            quantity, expiry_date, unit_price, batch_barcode
-        } = req.body;
-
-      const batch_number = req.body.batch_number || 'BATCH-001';
-
-      if (!drug_name || !quantity || !expiry_date || !reorder_point) {
-        return res.status(400).json({ message: 'drug_name, quantity, expiry_date and reorder_point are required' });
-      }
-
-      const drug = await Drug.create({
-            facility_id: req.user.facility_id,
-            drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days,
-            batches: [{ batch_number, quantity, expiry_date, unit_price, barcode: batch_barcode }],
-        }); 
-
-      // Trigger DSS Scan
-      await checkAndTriggerAlerts(drug, req.user.facility_id);
-
-      res.status(201).json({ status: 'success', message: 'Drug added successfully', drug });
-    } catch (err) {
-        if (err.code === 11000) return res.status(409).json({ message: 'A drug with this barcode already exists' });
-        res.status(500).json({ message: 'Server error', error: err.message });
-    }
-  },
-
   getAllDrugs: async (req, res) => {
     try {
-      const drugs = await Drug.find({ facility_id: req.user.facility_id, isActive: true }).sort({ drug_name: 1 });
+      const drugs = await Drug.find({ facility_id: req.user.facility_id, isActive: true })
+        .sort({ drug_name: 1 });
       res.status(200).json({ status: 'success', count: drugs.length, drugs });
-    } catch (err) {
-        res.status(500).json({ message: 'Server error', error: err.message });
-    }
-  },
-
-  getDrug: async (req, res) => {
-    try {
-      const drug = await Drug.findOne({ _id: req.params.id, facility_id: req.user.facility_id });
-      if (!drug) return res.status(404).json({ message: 'Drug not found' });
-      res.status(200).json({ status: 'success', drug });
-    } catch (err) {
-        res.status(500).json({ message: 'Server error', error: err.message });
-    }
-  },
-
-  updateDrug: async (req, res) => {
-        try {
-            const { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days } = req.body;
-            const drug = await Drug.findOneAndUpdate(
-                { _id: req.params.id, facility_id: req.user.facility_id },
-                { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days },
-                { returnDocument: 'after', runValidators: true }
-            );
-            if (!drug) return res.status(404).json({ message: 'Drug not found' });
-            
-            // Trigger DSS Scan (in case reorder point was changed to trigger an alert)
-            await checkAndTriggerAlerts(drug, req.user.facility_id);
-
-            res.status(200).json({ status: 'success', message: 'Drug updated', drug });
-        } catch (err) {
-            res.status(500).json({ message: 'Server error', error: err.message });
-        }
-    },
-
-  deactivateDrug: async (req, res) => {
-    try {
-        const drug = await Drug.findOneAndUpdate(
-            { _id: req.params.id, facility_id: req.user.facility_id },
-            { isActive: false },
-            { returnDocument: 'after' }
-        );
-        if (!drug) return res.status(404).json({ message: 'Drug not found' });
-        res.status(200).json({ status: 'success', message: 'Drug deactivated' });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
 
-  // ─── ADD BATCH ─────────────────────────────────────────
-  addBatch: async (req, res) => {
+  getDrug: async (req, res) => {
     try {
-        const { quantity, expiry_date, unit_price, batch_barcode } = req.body;
-        
-        const drug = await Drug.findOne({ _id: req.params.id, facility_id: req.user.facility_id });
-        if (!drug) return res.status(404).json({ message: 'Drug not found' });
-
-        const nextNum = drug.batches.length + 1;
-        const autoBatchString = `BATCH-${String(nextNum).padStart(3, '0')}`;
-        const batch_number = req.body.batch_number || autoBatchString;
-
-        if (!quantity || !expiry_date) return res.status(400).json({ message: 'quantity and expiry_date are required' });
-
-        drug.batches.push({ batch_number, quantity, expiry_date, unit_price, barcode: batch_barcode });
-        await drug.save();
-
-        // Trigger DSS Scan
-        await checkAndTriggerAlerts(drug, req.user.facility_id);
-
-        res.status(200).json({ status: 'success', message: 'Batch added successfully', drug });
+      const drug = await Drug.findOne({ _id: req.params.id, facility_id: req.user.facility_id, isActive: true });
+      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+      res.status(200).json({ status: 'success', drug });
     } catch (err) {
-        res.status(500).json({ message: 'Server error', error: err.message });
+      res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
+
+  addDrug: async (req, res) => {
+    try {
+      const { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days, batches } = req.body;
+      if (!drug_name) return res.status(400).json({ message: 'Drug name is required' });
+
+      // Clean up the initial batch if provided
+      let initialBatches = [];
+      if (batches && batches.length > 0) {
+         const { batch_number, quantity, expiry_date, unit_price, batch_barcode } = batches[0];
+         initialBatches = [{ batch_number, quantity, expiry_date, unit_price, barcode: batch_barcode }];
+      }
+
+      const drug = await Drug.create({
+          facility_id: req.user.facility_id,
+          drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days,
+          batches: initialBatches,
+      }); 
+
+      await checkAndTriggerAlerts(drug, req.user.facility_id);
+
+      res.status(201).json({ status: 'success', message: 'Drug added successfully', drug });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  updateDrug: async (req, res) => {
+    try {
+      const { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days } = req.body;
+      const drug = await Drug.findOneAndUpdate(
+          { _id: req.params.id, facility_id: req.user.facility_id, isActive: true },
+          { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days },
+          { returnDocument: 'after', runValidators: true }
+      );
+      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+      
+      await checkAndTriggerAlerts(drug, req.user.facility_id);
+
+      res.status(200).json({ status: 'success', message: 'Drug updated', drug });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  addBatch: async (req, res) => {
+    try {
+      const { batch_number, quantity, expiry_date, unit_price, batch_barcode } = req.body;
+      if (!batch_number || !quantity || !expiry_date) {
+        return res.status(400).json({ message: 'Batch number, quantity, and expiry date are required' });
+      }
+
+      const drug = await Drug.findOne({ _id: req.params.id, facility_id: req.user.facility_id, isActive: true });
+      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+
+      drug.batches.push({ batch_number, quantity, expiry_date, unit_price, barcode: batch_barcode });
+      await drug.save();
+
+      await checkAndTriggerAlerts(drug, req.user.facility_id);
+
+      res.status(200).json({ status: 'success', message: 'Batch added successfully', drug });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  deleteBatch: async (req, res) => {
+    try {
+      const { id, batch_number } = req.params;
+      const drug = await Drug.findOne({ _id: id, facility_id: req.user.facility_id, isActive: true });
+      
+      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+
+      drug.batches = drug.batches.filter(b => b.batch_number !== batch_number);
+      await drug.save();
+
+      res.status(200).json({ status: 'success', message: 'Batch deleted' });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  deactivateDrug: async (req, res) => {
+    try {
+      const drug = await Drug.findOneAndUpdate(
+          { _id: req.params.id, facility_id: req.user.facility_id },
+          { isActive: false },
+          { returnDocument: 'after' }
+      );
+      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+      res.status(200).json({ status: 'success', message: 'Drug deactivated', drug });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  deleteDrug: async (req, res) => {
+    try {
+      const drug = await Drug.findOneAndDelete({ _id: req.params.id, facility_id: req.user.facility_id });
+      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+      res.status(200).json({ status: 'success', message: 'Drug completely deleted' });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  }
 };
 
 export default inventoryController;

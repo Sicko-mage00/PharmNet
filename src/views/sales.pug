@@ -30,16 +30,16 @@ block content
   //- SALES HISTORY TABLE
   .card
     .card-title Sales History
-    .table-wrapper
-      table
+    .compact-table-wrapper
+      table.compact-table
         thead
           tr
-            th Date & Time
-            th Drug Name
-            th Qty Sold
-            th Batch Used
-            th System Alert
-            th Dispensed By
+            th(style="font-weight: 600; color: #64748b; font-size: 0.85rem;") Date & Time
+            th(style="font-weight: 600; color: #64748b; font-size: 0.85rem;") Drug Name
+            th(style="font-weight: 600; color: #64748b; font-size: 0.85rem;") Qty Sold
+            th(style="font-weight: 600; color: #64748b; font-size: 0.85rem;") Batch Used
+            th(style="font-weight: 600; color: #64748b; font-size: 0.85rem;") System Alert
+            th(style="font-weight: 600; color: #64748b; font-size: 0.85rem;") Dispensed By
         tbody#sales-table
           tr
             td(colspan='6' style='text-align:center;color:#6c757d')
@@ -74,7 +74,7 @@ block scripts
             const tbody = document.getElementById('sales-table');
 
             if (!sales.length) {
-              tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No sales recorded yet.</p></div></td></tr>';
+              tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem !important;"><div class="empty-state"><p>No sales recorded yet.</p></div></td></tr>';
               return;
             }
 
@@ -86,12 +86,12 @@ block scripts
               
               return `
                 <tr>
-                  <td data-label="Time" style="white-space:nowrap; color:#4a5568;">${timeStr}</td>
-                  <td data-label="Drug"><strong>${drugName}</strong></td>
-                  <td data-label="Qty Sold"><strong>${s.quantity_sold}</strong></td>
-                  <td data-label="Batch"><span style="font-family:monospace; font-size:0.85rem;">${s.batch_number || '—'}</span></td>
-                  <td data-label="Alert"><span class="badge ${ropTriggered ? 'badge-low' : 'badge-ok'}">${ropTriggered ? 'ROP Triggered' : 'Normal'}</span></td>
-                  <td data-label="Staff">${soldBy}</td>
+                  <td style="white-space:nowrap; color:#4a5568;">${timeStr}</td>
+                  <td><strong style="color: #334155;">${drugName}</strong></td>
+                  <td style="color: #475569;"><strong>${s.quantity_sold}</strong></td>
+                  <td><span style="font-family:monospace; font-size:0.85rem;">${s.batch_number || '—'}</span></td>
+                  <td><span class="badge ${ropTriggered ? 'badge-low' : 'badge-ok'}">${ropTriggered ? 'ROP Triggered' : 'Normal'}</span></td>
+                  <td style="color:#64748b">${soldBy}</td>
                 </tr>
               `;
             }).join('');
@@ -111,6 +111,7 @@ block scripts
         
         btn.textContent = 'Processing...';
         btn.disabled = true;
+        resultDiv.innerHTML = '';
 
         const body = {
           drug_id: document.getElementById('drug_select').value,
@@ -119,13 +120,26 @@ block scripts
           patient_ref: document.getElementById('patient_ref').value || ''
         };
 
+        // Enforce a strict 12-second timeout so the UI never hangs forever
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 12000);
+
         try {
           const res = await fetch('/api/sales', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify(body),
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
+
+          // Check if backend crashed and returned raw HTML instead of JSON
+          if (!res.ok && !res.headers.get('content-type')?.includes('application/json')) {
+              throw new Error(`Server Error (${res.status}): Backend logic crashed or failed to return JSON.`);
+          }
+
           const data = await res.json();
 
           if (res.ok) {
@@ -139,11 +153,24 @@ block scripts
                  ).join('');
             });
           } else {
-            resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:1rem;">${data.message || 'Failed to record sale'}</div>`;
+            // WE NOW SHOW THE EXACT DATABASE ERROR IN THE UI
+            resultDiv.innerHTML = `
+              <div class="flash flash-error" style="margin-bottom:1rem;">
+                <strong>${data.message || 'Failed to record sale'}</strong>
+                ${data.error ? `<br><span style="font-size:0.85rem; font-family:monospace; opacity:0.9; margin-top:5px; display:block;">Details: ${data.error}</span>` : ''}
+              </div>`;
           }
         } catch (err) {
-          resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:1rem;">Something went wrong.</div>`;
+          clearTimeout(timeoutId);
+          console.error('Sale submission failed:', err);
+          
+          if (err.name === 'AbortError') {
+             resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:1rem;">Request timed out. The server or database is unresponsive. Please restart your server.</div>`;
+          } else {
+             resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:1rem;">Error: ${err.message || 'Something went wrong.'}</div>`;
+          }
         } finally {
+          // Guaranteed to unfreeze the button
           btn.textContent = 'Complete Sale';
           btn.disabled = false;
         }

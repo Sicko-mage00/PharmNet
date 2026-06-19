@@ -365,6 +365,15 @@ tbody tr:hover td { background: var(--page-bg); }
 .batch-tag.warning { background: #fce4ec; color: #c62828; }
 .batch-tag.ok      { background: #e8f5e9; color: #2e7d32; }
 
+/* =========================================================
+   COMPACT TABLE (DASHBOARD RECENT SALES & MOBILE OVERRIDES)
+   ========================================================= */
+.compact-table-wrapper { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+.compact-table { width: 100%; border-collapse: collapse; min-width: 450px; }
+
+.compact-table th, 
+.compact-table td { padding: 10px 12px !important; text-align: center !important; white-space: nowrap !important; border-bottom: 1px solid #f1f5f9; }
 
 /* ─── 5. MODALS & OVERLAYS ──────────────────────────────── */
 .modal-backdrop {
@@ -734,6 +743,11 @@ table {
   .table-wrapper td::before {
     display: none !important; /* Removes the stacked card labels */
   }
+
+  .compact-table thead { display: table-header-group !important; }
+  .compact-table tr { display: table-row !important; }
+  .compact-table th, .compact-table td { display: table-cell !important; }
+  .compact-table td::before { display: none !important; } /* Hide any data-label text injections */
 
 }
 

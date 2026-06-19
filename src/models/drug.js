@@ -49,14 +49,13 @@ drugSchema.index({ 'batches.expiry_date': 1 });
 drugSchema.index({ facility_id: 1, barcode: 1 }, { unique: true, sparse: true });
 
 // Sort batches FEFO + recalculate total on every save
-drugSchema.pre('save', function (next) {
+drugSchema.pre('save', function () {
   if (this.batches && this.batches.length) {
     this.batches.sort((a, b) => new Date(a.expiry_date) - new Date(b.expiry_date));
     this.total_quantity = this.batches.reduce((sum, b) => sum + b.quantity, 0);
   } else {
     this.total_quantity = 0;
   }
-  next(); // <--- Made sure to add next() here so Mongoose doesn't hang!
 });
 
 // First element is always nearest expiry after sort
