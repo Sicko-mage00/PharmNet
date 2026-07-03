@@ -40,6 +40,8 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
-    "browser-sync": "^3.0.4"
+    "@prettier/plugin-pug": "^3.4.2",
+    "browser-sync": "^3.0.4",
+    "prettier": "^3.9.4"
   }
 }

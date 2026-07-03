@@ -1,443 +1,330 @@
 extends layout
 
 block content
-  .page-header
-    h2.page-title Alerts
+  .wa-container
+    //- LEFT PANEL: Contact List (No tabs)
+    #wa-sidebar.wa-sidebar
+      #wa-chat-list.wa-chat-list
+        .loader(style='margin-top: 2rem')
+          .spinner
+          | Loading Alerts...
 
-  #alerts-container
-    .loader
-      .spinner
-      |  Loading...
+    //- RIGHT PANEL: The Chat
+    #wa-chat-area.wa-chat-area
+      #wa-chat-empty.wa-chat-empty
+        div(style='text-align: center')
+          svg(
+            xmlns='http://www.w3.org/2000/svg',
+            width='64',
+            height='64',
+            viewBox='0 0 24 24',
+            fill='none',
+            stroke='#a0aec0',
+            stroke-width='1',
+            stroke-linecap='round',
+            stroke-linejoin='round',
+            style='margin-bottom: 15px'
+          )
+            path(
+              d='M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'
+            )
+          p Select a drug to view its alert history
+
+      #wa-chat-view.wa-chat-view
+        .wa-chat-header
+          button.wa-back-btn(onclick='closeChat()') ←
+          h3#chat-drug-title.wa-chat-drug-name Drug Name
+        #wa-messages.wa-messages
+          //- Bubbles go here
 
 block scripts
   script.
-    document.addEventListener('DOMContentLoaded', () => {
-      const user = getUser();
+    // ── GLOBALS & STATE ──
+    let allAlerts = [];
+    let groupedAlerts = {};
+    let activeChatKey = null;
+    const user = typeof getUser === 'function' ? getUser() : null;
 
-      const icons = {
-        bell: `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>`,
-        trendDown: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline></svg>`,
-        box: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
-        calendar: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
-        note: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`,
-        warning: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`,
-        check: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
-        cross: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
-        star: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--warning)" stroke="var(--warning)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`,
-        globe: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>`,
-        fire: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="var(--danger)" stroke="var(--danger)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`,
-        hash: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`
-      };
+    // ── ICONS (ESCAPED) ──
+    const icons = {
+      cross: '\x3csvg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;"\x3e\x3cline x1="18" y1="6" x2="6" y2="18"\x3e\x3c/line\x3e\x3cline x1="6" y1="6" x2="18" y2="18"\x3e\x3c/line\x3e\x3c/svg\x3e',
+    };
 
-      const formatCompactDate = (dateString) => {
-        if (!dateString) return '—';
-        return new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short' }).format(new Date(dateString)); 
-      };
+    // ── DATE HELPERS (WhatsApp Style) ──
+    const getWhatsAppDateStr = (dateInput) => {
+      const date = new Date(dateInput);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
 
-      const formatStrictDate = (dateString) => {
-        if (!dateString) return '—';
-        return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(dateString));
-      };
+      if (date.toDateString() === today.toDateString()) return 'Today';
+      if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
 
-      // ── THE RELATIVE TIME CALCULATOR (e.g. 2 weeks and 3 days left) ──
-      const getRelativeTime = (dateString) => {
-        if (!dateString) return '';
-        const now = new Date();
-        const target = new Date(dateString);
-        const diffTime = target - now;
-        
-        if (diffTime < 0) return '<span style="color:var(--danger)"> (Expired)</span>';
-        
-        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays === 0) return ' (Expires today)';
-        if (diffDays < 7) return ` (${diffDays} days left)`;
-        
-        if (diffDays < 30) {
-            const weeks = Math.floor(diffDays/7);
-            const days = diffDays%7;
-            return ` (${weeks} week${weeks>1?'s':''} ${days>0 ? `and ${days} day${days>1?'s':''} ` : ''}left)`;
+      const diffTime = Math.abs(today - date);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
+      return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    const formatTime = (dateString) => {
+      return new Date(dateString).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    };
+
+    // ── DATA PROCESSING ──
+    const loadAlerts = async () => {
+      try {
+        const r = await fetch('/api/alerts', { credentials: 'include' });
+        const data = await r.json();
+        allAlerts = data.alerts || [];
+
+        groupedAlerts = {};
+        allAlerts.forEach((a) => {
+          const key = a.drug_name || 'System Alert';
+          if (!groupedAlerts[key]) {
+            groupedAlerts[key] = { drugName: key, alerts: [], unread: 0, latestTime: new Date(0), latestMsg: '' };
+          }
+          groupedAlerts[key].alerts.push(a);
+        });
+
+        for (const key in groupedAlerts) {
+          const group = groupedAlerts[key];
+          group.alerts.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+          const latest = group.alerts[group.alerts.length - 1];
+          group.latestTime = new Date(latest.created_at);
+
+          if (latest.isTransfer) group.latestMsg = 'Network Transfer';
+          else if (latest.type === 'ROP') group.latestMsg = 'Low Stock (ROP)';
+          else group.latestMsg = 'Expiring Stock (FEFO)';
+
+          group.unread = group.alerts.filter((a) => a.status === 'pending' && !a.is_read).length;
         }
-        
-        const diffMonths = Math.floor(diffDays / 30);
-        const remDays = diffDays % 30;
-        const remWeeks = Math.floor(remDays/7);
-        if (diffMonths < 12) {
-            return ` (${diffMonths} month${diffMonths>1?'s':''}${remWeeks>0 ? ` and ${remWeeks} week${remWeeks>1?'s':''}` : ''} left)`;
-        }
-        
-        const diffYears = Math.floor(diffMonths / 12);
-        return ` (${diffYears} year${diffYears>1?'s':''} left)`;
-      };
+        renderList();
+        if (activeChatKey) openChat(activeChatKey, true);
+      } catch (err) {
+        document.getElementById('wa-chat-list').innerHTML = '\x3cdiv class="flash flash-error"\x3eFailed to load alerts\x3c/div\x3e';
+      }
+    };
 
-      // ── ACCORDION TOGGLE ──
-      window.toggleAccordion = (element, event) => {
-        event.stopPropagation(); 
-        const accordion = element.closest('.alert-accordion');
-        const wasExpanded = accordion.classList.contains('expanded');
-        document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
-        if (!wasExpanded) accordion.classList.add('expanded');
-      };
+    // ── UI RENDERING ──
+    const renderList = () => {
+      const listDiv = document.getElementById('wa-chat-list');
+      let groupsArray = Object.values(groupedAlerts).sort((a, b) => b.latestTime - a.latestTime);
 
-      // ── BUG FIX: Prevent Modal Clicks from Closing Accordion ──
-      document.addEventListener('click', (e) => {
-        // If clicking inside an accordion or inside ANY open modal, do nothing
-        if (e.target.closest('.alert-accordion') || e.target.closest('.modal-backdrop')) {
-            return; 
+      if (groupsArray.length === 0) {
+        listDiv.innerHTML = '\x3cdiv style="padding: 30px; text-align:center; color:#667781;"\x3eNo alerts available\x3c/div\x3e';
+        return;
+      }
+
+      listDiv.innerHTML = groupsArray
+        .map((g) => {
+          const timeStr = getWhatsAppDateStr(g.latestTime) === 'Today' ? formatTime(g.latestTime) : getWhatsAppDateStr(g.latestTime);
+          const activeClass = activeChatKey === g.drugName ? ' active' : '';
+
+          return '\x3cdiv class="wa-drug-row' + activeClass + '" onclick="openChat(\'' + g.drugName.replace(/'/g, "\\'") + '\')"\x3e' + '\x3cdiv class="wa-drug-info"\x3e' + '\x3cdiv class="wa-drug-name"\x3e' + g.drugName + '\x3c/div\x3e' + '\x3cdiv class="wa-drug-preview"\x3e' + g.latestMsg + '\x3c/div\x3e' + '\x3c/div\x3e' + '\x3cdiv class="wa-drug-meta"\x3e' + '\x3cspan class="wa-time"\x3e' + timeStr + '\x3c/span\x3e' + (g.unread > 0 ? '\x3cspan class="wa-unread"\x3e' + g.unread + '\x3c/span\x3e' : '') + '\x3c/div\x3e' + '\x3c/div\x3e';
+        })
+        .join('');
+    };
+
+    window.openChat = async (drugKey, isQuietRefresh = false) => {
+      activeChatKey = drugKey;
+      const group = groupedAlerts[drugKey];
+      if (!group) return;
+
+      if (group.unread > 0) {
+        try {
+          await fetch('/api/alerts/read/' + encodeURIComponent(drugKey), { method: 'PATCH', credentials: 'include' });
+          group.unread = 0;
+        } catch (e) {
+          console.error('Failed to mark read', e);
         }
-        document.querySelectorAll('.alert-accordion.expanded').forEach(acc => acc.classList.remove('expanded'));
+      }
+
+      if (window.innerWidth <= 768) {
+        document.getElementById('wa-sidebar').classList.add('chat-open');
+        document.getElementById('wa-chat-area').classList.add('chat-open');
+      }
+
+      if (!isQuietRefresh) renderList();
+
+      document.getElementById('wa-chat-empty').style.display = 'none';
+      document.getElementById('wa-chat-view').classList.add('visible');
+      document.getElementById('chat-drug-title').textContent = group.drugName;
+
+      const messagesDiv = document.getElementById('wa-messages');
+      let html = '';
+      let lastDateGroup = null;
+
+      group.alerts.forEach((a) => {
+        const dateStr = getWhatsAppDateStr(a.created_at);
+
+        if (dateStr !== lastDateGroup) {
+          html += '\x3cdiv class="wa-date-sep"\x3e\x3cspan\x3e' + dateStr + '\x3c/span\x3e\x3c/div\x3e';
+          lastDateGroup = dateStr;
+        }
+
+        const myFacStr = typeof user !== 'undefined' && user && user.facilityId ? String(user.facilityId) : '';
+        const isSource = a.source_facility && String(a.source_facility._id) === myFacStr;
+        const isTarget = a.target_facility && String(a.target_facility._id) === myFacStr;
+
+        let typeClass = 'transfer';
+        let typeLabel = 'NETWORK TRANSFER';
+
+        if (!a.isTransfer) {
+          if (a.type === 'ROP') {
+            typeClass = 'rop';
+            typeLabel = 'LOW STOCK (ROP)';
+          } else {
+            typeClass = 'fefo';
+            typeLabel = 'EXPIRING STOCK (FEFO)';
+          }
+        }
+
+        let actionsHtml = '';
+        if (!a.isTransfer && a.status === 'pending') {
+          if (a.type === 'ROP') {
+            actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + "', '" + a.drug_name.replace(/'/g, "\\'") + "', " + a.quantity_needed + ", 'Standard Requisition', 'ROP')\"\x3eRequest Stock\x3c/button\x3e" + '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + "','self-resolve')\"\x3eSelf Resolve\x3c/button\x3e";
+          } else {
+            actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + "', '" + a.drug_name.replace(/'/g, "\\'") + "', " + a.quantity_available + ", 'Discounted Offload', 'FEFO')\"\x3ePush Discount\x3c/button\x3e" + '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + "','self-resolve')\"\x3eSelf Resolve\x3c/button\x3e";
+          }
+        } else if (a.isTransfer) {
+          if (a.status === 'pending' && isSource) {
+            actionsHtml = '\x3cbutton class="btn btn-success" onclick="doAlert(\'' + a._id + "','confirm')\"\x3eAccept\x3c/button\x3e" + '\x3cbutton class="btn btn-danger" onclick="doAlert(\'' + a._id + "','decline')\"\x3eDecline\x3c/button\x3e";
+          }
+          if (a.status === 'confirmed' && isSource) {
+            actionsHtml = '\x3cbutton class="btn btn-primary" onclick="doAlert(\'' + a._id + "','dispatch')\"\x3eMark Dispatched\x3c/button\x3e";
+          }
+          if (a.status === 'dispatched' && isTarget) {
+            actionsHtml = '\x3cbutton class="btn btn-success" onclick="resolveWithBatch(\'' + a._id + '\')"\x3eConfirm Receipt\x3c/button\x3e';
+          }
+        }
+
+        html += '\x3cdiv class="wa-bubble ' + typeClass + '"\x3e' + '\x3cdiv class="wa-bubble-header"\x3e' + '\x3cspan class="wa-bubble-type ' + typeClass + '"\x3e' + typeLabel + '\x3c/span\x3e' + '\x3cspan class="wa-badge-status badge-' + (a.status === 'pending' ? 'pending' : 'resolved') + '"\x3e' + a.status + '\x3c/span\x3e' + '\x3c/div\x3e' + '\x3cdiv class="wa-bubble-body"\x3e' + (a.notes || 'System Alert triggered.') + (a.quantity_available ? '\x3cbr\x3e\x3cspan style="color:#64748b; display:inline-block; margin-top:4px;"\x3eAvailable: ' + a.quantity_available + '\x3c/span\x3e' : '') + '\x3c/div\x3e' + (actionsHtml ? '\x3cdiv class="wa-bubble-actions"\x3e' + actionsHtml + '\x3c/div\x3e' : '') + '\x3cdiv class="wa-bubble-footer"\x3e' + '\x3cspan class="wa-bubble-time"\x3e' + formatTime(a.created_at) + '\x3c/span\x3e' + '\x3c/div\x3e' + '\x3c/div\x3e';
       });
 
-      const loadAlerts = () => {
-        fetch('/api/alerts', { credentials: 'include' })
-          .then(r => r.json())
-          .then(data => {
-            const alerts = data.alerts || [];
-            const container = document.getElementById('alerts-container');
+      messagesDiv.innerHTML = html;
+      if (!isQuietRefresh) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    };
 
-            if (!alerts.length) {
-              container.innerHTML = `
-                <div class="empty-state">
-                  <div class="empty-state-icon" style="color: #a0aec0; margin-bottom: 10px;">${icons.bell}</div>
-                  <p>No active alerts</p>
-                </div>`;
-              return;
-            }
+    window.closeChat = () => {
+      activeChatKey = null;
+      if (window.innerWidth <= 768) {
+        document.getElementById('wa-sidebar').classList.remove('chat-open');
+        document.getElementById('wa-chat-area').classList.remove('chat-open');
+      }
+      document.getElementById('wa-chat-empty').style.display = 'flex';
+      document.getElementById('wa-chat-view').classList.remove('visible');
+      renderList();
+    };
 
-            container.innerHTML = alerts.map(a => {
-              const myFacStr    = user && user.facilityId ? String(user.facilityId) : '';
-              const sourceStr   = a.source_facility && a.source_facility._id ? String(a.source_facility._id) : '';
-              const targetStr   = a.target_facility && a.target_facility._id ? String(a.target_facility._id) : '';
-              
-              const isSelfAlert = !a.isTransfer; 
-              const isSource    = sourceStr === myFacStr;
-              const isTarget    = targetStr === myFacStr;
-
-              let actions = '';
-              let previewText = '';
-              let detailsHtml = '';
-
-              if (isSelfAlert) {
-                  // ROP ALERT
-                  if (a.type === 'ROP') {
-                      previewText = `Low Stock — Only ${a.quantity_available || 0} left`;
-                      detailsHtml += `<div class="detail-item">${icons.box} <strong>Your Stock:</strong>&nbsp;${a.quantity_available || 0} units</div>`;
-                      detailsHtml += `<div class="detail-item">${icons.trendDown} <strong>Suggested Reorder:</strong>&nbsp;${a.quantity_needed} units</div>`;
-                      
-                      if (a.status === 'pending') {
-                          // Buttons styled with new alert-action-btn class
-                          actions += `<button class="btn btn-primary alert-action-btn" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_needed}, 'Standard Requisition', 'ROP')">Request from Network</button>`;
-                          actions += `<button class="btn btn-ghost alert-action-btn" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
-                      }
-                  } else {
-                      // FEFO ALERT (Batch goes here!)
-                      previewText = `Expiring — ${a.quantity_available || 0} units expiring soon`;
-                      detailsHtml += `<div class="detail-item">${icons.box} <strong>Expiring Stock:</strong>&nbsp;${a.quantity_available || 0} units</div>`;
-                      detailsHtml += `<div class="detail-item">${icons.calendar} <strong>Expiry Date:</strong>&nbsp;${formatStrictDate(a.expiry_date)} <span style="font-size:0.8rem; color:var(--text-muted);">${getRelativeTime(a.expiry_date)}</span></div>`;
-                      
-                      // BATCH ONLY RENDERS FOR FEFO
-                      if (a.batch_number) {
-                          detailsHtml += `<div class="detail-item">${icons.hash} <strong>Batch No:</strong>&nbsp;${a.batch_number}</div>`;
-                      }
-                      
-                      if (a.status === 'pending') {
-                          actions += `<button class="btn btn-warning alert-action-btn" onclick="openNetworkModal('${a.drug_id._id}', '${a.drug_name}', ${a.quantity_available}, 'Discounted Offload', 'FEFO')">Push Discounted Offload</button>`;
-                          actions += `<button class="btn btn-ghost alert-action-btn" onclick="doAlert('${a._id}','self-resolve')">Self Resolve</button>`;
-                      }
-                  }
-              } else {
-                  // NETWORK TRANSFER
-                  if (a.status === 'pending') {
-                      previewText = isSource ? `Transfer request from ${a.target_facility?.name}` : `Awaiting response from ${a.source_facility?.name}`;
-                  } else if (a.status === 'confirmed') {
-                      previewText = `Transfer agreed — awaiting dispatch`;
-                  } else if (a.status === 'dispatched') {
-                      previewText = `Drugs dispatched — awaiting receipt`;
-                  } else {
-                      previewText = a.notes || 'Status updated';
-                  }
-
-                  detailsHtml += `<div class="detail-item"><strong>Transfer Path:</strong>&nbsp;${a.source_facility ? a.source_facility.name : '—'} &nbsp;→&nbsp; ${a.target_facility ? a.target_facility.name : '—'}</div>`;
-                  detailsHtml += `<div class="detail-item">${icons.box} <strong>Quantity Agreed:</strong>&nbsp;${a.quantity_needed || a.quantity_available} units</div>`;
-
-                  if (a.status === 'pending' && isSource) {
-                      actions += `<button class="btn btn-success alert-action-btn" onclick="doAlert('${a._id}','confirm')">${icons.check} Accept Transfer</button>`;
-                      actions += `<button class="btn btn-danger alert-action-btn" onclick="doAlert('${a._id}','decline')">${icons.cross} Decline</button>`;
-                  }
-                  if (a.status === 'confirmed' && isSource) {
-                      actions += `<button class="btn btn-primary alert-action-btn" onclick="doAlert('${a._id}','dispatch')">${icons.box} Mark Dispatched</button>`;
-                  }
-                  if (a.status === 'dispatched' && isTarget) {
-                      actions += `<button class="btn btn-success alert-action-btn" onclick="resolveWithBatch('${a._id}')">${icons.check} Confirm Receipt (Auto-Update Inventory)</button>`;
-                  }
-              }
-
-              const borderClass = a.isTransfer ? 'type-Transfer' : `type-${a.type}`;
-              const pillBadge = a.isTransfer 
-                ? `<span class="badge-pill" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">TRANSFER</span>` 
-                : (a.type === 'ROP' ? `<span class="badge-pill badge-rop-pill">ROP</span>` : `<span class="badge-pill badge-fefo-pill">FEFO</span>`);
-
-              return `
-                <div class="alert-accordion ${borderClass}">
-                  <div class="alert-header" onclick="toggleAccordion(this, event)">
-                    <div class="alert-header-top">
-                      <span class="drug-name">${a.drug_name || '—'}</span>
-                      <span class="alert-date">${formatCompactDate(a.created_at)}</span>
-                    </div>
-                    <div class="alert-header-bottom">
-                      <span class="alert-preview">${previewText}</span>
-                      <div class="alert-badges">
-                        ${pillBadge}
-                        <span class="badge badge-${a.status}">${a.status}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div class="alert-body">
-                    <div class="alert-details-grid">
-                        ${detailsHtml}
-                    </div>
-                    
-                    ${a.notes ? `<div style="font-size:0.85rem; color:#4a5568; margin-bottom: 15px; padding: 10px; background: #f8fafc; border-radius: 6px;">${icons.note} <strong>System Note:</strong> ${a.notes}</div>` : ''}
-                    
-                    ${actions ? `<div class="alert-card-footer">${actions}</div>` : ''}
-                  </div>
-                </div>
-              `;
-            }).join('');
-          })
-          .catch(err => {
-            console.error(err);
-            showError('Failed to load alerts');
-          });
-      };
-
-      loadAlerts();
-
-      const showError = (msg) => {
-        const container = document.getElementById('alerts-container');
-        const el = document.createElement('div');
-        el.className = 'flash flash-error';
-        el.style.marginBottom = '1rem';
-        el.textContent = msg;
-        container.prepend(el);
-        setTimeout(() => el.remove(), 4000);
-      };
-
-      const doAlert = async (id, action) => {
-        const body = action === 'dispatch' ? { notes: 'Drugs dispatched' } : action === 'self-resolve' ? { notes: 'Resolved externally' } : {};
-        const res  = await fetch(`/api/alerts/${id}/${action}`, {
+    const doAlert = async (id, action) => {
+      const body = action === 'dispatch' ? { notes: 'Drugs dispatched' } : action === 'self-resolve' ? { notes: 'Resolved externally' } : {};
+      try {
+        const res = await fetch('/api/alerts/' + id + '/' + action, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify(body),
         });
-        const data = await res.json();
         if (res.ok) loadAlerts();
-        else showError(data.message || 'Action failed');
-      };
+        else alert('Action failed. Please try again.');
+      } catch (e) {
+        alert('Network error.');
+      }
+    };
 
-      window.openNetworkModal = async (drugId, drugName, defaultQty, transactionType, alertType) => {
-        const modal = document.createElement('div');
-        modal.className = 'modal-backdrop';
-        modal.style.display = 'flex';
-        modal.innerHTML = `
-        <div class="modal-box" style="max-width:750px; border-top: 4px solid #0052CC;">
-            <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                <h3 style="color: #333;">Fetching Network Matches...</h3>
-                <button class="modal-close" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">${icons.cross}</button>
-            </div>
-            <div class="modal-body" style="padding: 30px 0; text-align: center;">
-                <div class="spinner" style="margin: 0 auto;"></div>
-                <p style="margin-top: 15px; color: #666;">Analyzing facility tiers and geography...</p>
-            </div>
-        </div>`;
-        document.body.appendChild(modal);
+    window.resolveWithBatch = (id) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = '\x3cdiv class="modal-box"\x3e' + '\x3cdiv class="modal-header"\x3e\x3ch3\x3eConfirm Receipt\x3c/h3\x3e\x3cbutton class="modal-close" onclick="this.closest(\'.modal-backdrop\').remove()"\x3e' + icons.cross + '\x3c/button\x3e\x3c/div\x3e' + '\x3cdiv class="form-group" style="padding:15px 0;"\x3e\x3clabel\x3eBatch Number (Optional)\x3c/label\x3e\x3cinput class="form-control" id="resolve-batch" placeholder="Leave blank for Auto-Batch" /\x3e\x3c/div\x3e' + '\x3cdiv id="resolve-result"\x3e\x3c/div\x3e' + '\x3cdiv class="modal-footer"\x3e\x3cbutton class="btn btn-ghost" onclick="this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e\x3cbutton class="btn btn-success" onclick="submitResolve(\'' + id + '\', this)"\x3eMark Received\x3c/button\x3e\x3c/div\x3e' + '\x3c/div\x3e';
+      document.body.appendChild(modal);
+    };
 
-        try {
-            const res = await fetch(`/api/alerts/network-matches?drugName=${encodeURIComponent(drugName)}&type=${alertType}`, {
-                credentials: 'include'
-            });
-            const responseData = await res.json();
+    window.submitResolve = async (id, btn) => {
+      const batch_number = document.getElementById('resolve-batch').value.trim();
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+      const res = await fetch('/api/alerts/' + id + '/resolve', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ batch_number, notes: 'Drugs received' }),
+      });
+      if (res.ok) {
+        document.querySelector('.modal-backdrop')?.remove();
+        loadAlerts();
+      } else {
+        document.getElementById('resolve-result').innerHTML = '\x3cdiv class="flash flash-error"\x3eFailed to resolve\x3c/div\x3e';
+        btn.disabled = false;
+        btn.textContent = 'Mark Received';
+      }
+    };
 
-            if (!res.ok) throw new Error(responseData.message);
+    window.openNetworkModal = async (drugId, drugName, defaultQty, transactionType, alertType) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = '\x3cdiv class="modal-box" style="max-width:750px; border-top: 4px solid #0052CC;"\x3e' + '\x3cdiv class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;"\x3e' + '\x3ch3 style="color: #333;"\x3eFetching Network Matches...\x3c/h3\x3e' + '\x3cbutton class="modal-close" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3e' + icons.cross + '\x3c/button\x3e' + '\x3c/div\x3e' + '\x3cdiv class="modal-body" style="padding: 30px 0; text-align: center;"\x3e' + '\x3cdiv class="spinner" style="margin: 0 auto;"\x3e\x3c/div\x3e' + '\x3cp style="margin-top: 15px; color: #666;"\x3eAnalyzing facility tiers and geography...\x3c/p\x3e' + '\x3c/div\x3e\x3c/div\x3e';
+      document.body.appendChild(modal);
 
-            const { priorityMatches, recommended, openNetwork } = responseData.data;
-            const inputType = alertType === 'ROP' ? 'checkbox' : 'radio';
-            const instructionText = alertType === 'ROP' 
-                ? 'Select one or more facilities to request stock from. The first to confirm will fulfill the order.' 
-                : 'Select ONE facility to offer your discounted stock to prevent double-selling.';
+      try {
+        const res = await fetch('/api/alerts/network-matches?drugName=' + encodeURIComponent(drugName) + '&type=' + alertType, { credentials: 'include' });
+        const responseData = await res.json();
+        if (!res.ok) throw new Error(responseData.message);
 
-            const buildList = (facilities, isPriority = false) => facilities.map(f => `
-                <div class="network-match-card ${isPriority ? 'priority-match-card' : ''}">
-                    <input type="${inputType}" name="facilitySelection" value="${f.facilityId}" id="fac-${f.facilityId}" data-type="${f.transactionType}" class="network-match-checkbox">
-                    <label for="fac-${f.facilityId}" class="network-match-info" style="cursor: pointer; margin: 0;">
-                        <strong>${f.name}</strong>
-                        <span>${f.tier} • ${f.state} (${f.lga})</span>
-                    </label>
-                    <span class="badge badge-${isPriority ? 'warning' : 'success'} network-match-status">${f.statusText}</span>
-                </div>
-            `).join('');
+        const { priorityMatches, recommended, openNetwork } = responseData.data;
+        const inputType = alertType === 'ROP' ? 'checkbox' : 'radio';
+        const instructionText = alertType === 'ROP' ? 'Select facilities to request from.' : 'Select ONE facility to offer your discounted stock to.';
 
-            const modalBox = modal.querySelector('.modal-box');
-            modalBox.innerHTML = `
-                <div class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                    <h3 style="color: #333;">Confirm Transaction Details</h3>
-                    <button class="modal-close" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">${icons.cross}</button>
-                </div>
-                
-                <div class="modal-body" style="padding: 15px 0; max-height: 60vh; overflow-y: auto;">
-                    <p style="font-size:0.9rem; color:#8492a6; margin-bottom: 15px;">${instructionText}</p>
-                    
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
-                        <p style="margin-bottom: 8px;"><strong>Drug:</strong> ${drugName}</p>
-                        <p style="margin-bottom: 8px;"><strong>Quantity:</strong> ${defaultQty}</p>
-                        <div style="margin-top: 10px;">
-                            <label style="font-size: 0.85rem; font-weight: bold;">Confirm Unit Metric:</label>
-                            <select class="form-control" id="draft-unit" style="margin-top: 4px;">
-                                <option value="Carton">Carton</option>
-                                <option value="Roll">Roll</option>
-                                <option value="Pack" selected>Pack</option>
-                                <option value="Card">Card</option>
-                                <option value="Bottle">Bottle</option>
-                                <option value="Pieces">Pieces</option>
-                            </select>
-                        </div>
-                    </div>
+        const buildList = (facilities, isPriority = false) => facilities.map((f) => '\x3cdiv class="network-match-card ' + (isPriority ? 'priority-match-card' : '') + '"\x3e' + '\x3cinput type="' + inputType + '" name="facilitySelection" value="' + f.facilityId + '" id="fac-' + f.facilityId + '" data-type="' + f.transactionType + '" class="network-match-checkbox"\x3e' + '\x3clabel for="fac-' + f.facilityId + '" class="network-match-info" style="cursor: pointer; margin: 0;"\x3e' + '\x3cstrong\x3e' + f.name + '\x3c/strong\x3e\x3cspan\x3e' + f.tier + ' • ' + f.state + ' (' + f.lga + ')\x3c/span\x3e' + '\x3clabel\x3e' + '\x3cspan class="badge badge-' + (isPriority ? 'warning' : 'success') + ' network-match-status"\x3e' + f.statusText + '\x3c/span\x3e' + '\x3c/div\x3e').join('');
 
-                    ${priorityMatches && priorityMatches.length > 0 ? `
-                      <h4 style="display: flex; align-items: center; font-size: 1rem; margin-bottom: 10px; color: #c05621;">${icons.fire} Priority Matches (Waste vs Want)</h4>
-                      <p style="font-size: 0.8rem; color: #718096; margin-bottom: 10px;">These facilities have surplus expiring within 180 days. Selecting them automatically structures a Discounted Offload.</p>
-                      ${buildList(priorityMatches, true)}
-                    ` : ''}
+        modal.querySelector('.modal-box').innerHTML = '\x3cdiv class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;"\x3e' + '\x3ch3 style="color: #333;"\x3eConfirm Transaction Details\x3c/h3\x3e' + '\x3cbutton class="modal-close" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3e' + icons.cross + '\x3c/button\x3e' + '\x3c/div\x3e' + '\x3cdiv class="modal-body" style="padding: 15px 0; max-height: 60vh; overflow-y: auto;"\x3e' + '\x3cp style="font-size:0.9rem; color:#8492a6; margin-bottom: 15px;"\x3e' + instructionText + '\x3c/p\x3e' + '\x3cdiv style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;"\x3e' + '\x3cp style="margin-bottom: 8px;"\x3e\x3cstrong\x3eDrug:\x3c/strong\x3e ' + drugName + '\x3c/p\x3e' + '\x3cp style="margin-bottom: 8px;"\x3e\x3cstrong\x3eQuantity:\x3c/strong\x3e ' + defaultQty + '\x3c/p\x3e' + '\x3cdiv style="margin-top: 10px;"\x3e' + '\x3clabel style="font-size: 0.85rem; font-weight: bold;"\x3eConfirm Unit Metric:\x3c/label\x3e' + '\x3cselect class="form-control" id="draft-unit" style="margin-top: 4px;"\x3e' + '\x3coption value="Carton"\x3eCarton\x3c/option\x3e\x3coption value="Roll"\x3eRoll\x3c/option\x3e\x3coption value="Pack" selected\x3ePack\x3c/option\x3e\x3coption value="Card"\x3eCard\x3c/option\x3e\x3coption value="Bottle"\x3eBottle\x3c/option\x3e\x3coption value="Pieces"\x3ePieces\x3c/option\x3e' + '\x3c/select\x3e' + '\x3c/div\x3e' + '\x3c/div\x3e' + (priorityMatches && priorityMatches.length > 0 ? '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-bottom: 10px; color: #c05621;"\x3ePriority Matches (Waste vs Want)\x3c/h4\x3e' + buildList(priorityMatches, true) : '') + '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #2b6cb0;"\x3eRecommended Network Matches\x3c/h4\x3e' + (recommended.length > 0 ? buildList(recommended) : '\x3cp style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 15px;"\x3eNo standard peer-tier facilities found in your state.\x3c/p\x3e') + '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #4a5568;"\x3eOpen Network Directory\x3c/h4\x3e' + (openNetwork.length > 0 ? buildList(openNetwork) : '\x3cp style="font-size: 0.85rem; color: #a0aec0;"\x3eNo additional facilities available.\x3c/p\x3e') + '\x3c/div\x3e' + '\x3cdiv id="transfer-result"\x3e\x3c/div\x3e' + '\x3cdiv class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px; display: flex; justify-content: flex-end; gap: 10px;"\x3e' + '\x3cbutton class="btn btn-ghost" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e' + '\x3cbutton class="btn btn-success" style="width: 250px; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers(\'' + drugId + "', " + defaultQty + ', this)"\x3eConfirm & Transmit\x3c/button\x3e' + '\x3c/div\x3e';
+      } catch (err) {
+        modal.querySelector('.modal-body').innerHTML = '\x3cdiv class="flash flash-error"\x3e' + (err.message || 'Failed to fetch network directory.') + '\x3c/div\x3e';
+      }
+    };
 
-                    <h4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #2b6cb0;">${icons.star} Recommended Network Matches</h4>
-                    ${recommended.length > 0 ? buildList(recommended) : '<p style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 15px;">No standard peer-tier facilities found in your state.</p>'}
+    window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
+      const resultDiv = document.getElementById('transfer-result');
+      const unit = document.getElementById('draft-unit').value;
+      const selectedInputs = document.querySelectorAll('input[name="facilitySelection"]:checked');
 
-                    <h4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #4a5568;">${icons.globe} Open Network Directory</h4>
-                    ${openNetwork.length > 0 ? buildList(openNetwork) : '<p style="font-size: 0.85rem; color: #a0aec0;">No additional facilities available.</p>'}
-                </div>
+      if (selectedInputs.length === 0) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3ePlease select at least one facility.\x3c/div\x3e';
+        return;
+      }
 
-                <div id="transfer-result"></div>
-                
-                <div class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px;">
-                    <button class="btn btn-ghost" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">Cancel</button>
-                    <button class="btn btn-success" style="width: fit-content; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers('${drugId}', ${defaultQty}, this)">Confirm & Transmit</button>
-                </div>
-            `;
-        } catch (err) {
-            modal.querySelector('.modal-body').innerHTML = `<div class="flash flash-error">${err.message || 'Failed to fetch network directory.'}</div>`;
-        }
-      };
+      btn.disabled = true;
+      btn.textContent = 'Transmitting...';
 
-      window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
-        const resultDiv = document.getElementById('transfer-result');
-        const unit = document.getElementById('draft-unit').value;
-        const selectedInputs = document.querySelectorAll('input[name="facilitySelection"]:checked');
-        
-        if (selectedInputs.length === 0) {
-            resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.warning} Please select at least one facility.</div>`;
-            return;
-        }
+      try {
+        const promises = Array.from(selectedInputs).map(async (input) => {
+          const draftRes = await fetch('/api/alerts/transfer/draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ providerFacilityId: input.value, drugId: drugId, quantityRequested: defaultQty, unit: unit, transactionType: input.getAttribute('data-type') }),
+          });
+          const draftData = await draftRes.json();
+          if (!draftRes.ok) throw new Error(draftData.message);
 
-        btn.disabled = true;
-        btn.textContent = 'Transmitting...';
-
-        try {
-            const promises = Array.from(selectedInputs).map(async (input) => {
-                const targetFacId = input.value;
-                const dynamicTxType = input.getAttribute('data-type'); 
-                const draftRes = await fetch('/api/alerts/transfer/draft', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        providerFacilityId: targetFacId,
-                        drugId: drugId,
-                        quantityRequested: defaultQty,
-                        unit: unit, 
-                        transactionType: dynamicTxType
-                    })
-                });
-                const draftData = await draftRes.json();
-                if (!draftRes.ok) throw new Error(draftData.message);
-
-                const transRes = await fetch(`/api/alerts/transfer/${draftData.draft._id}/transmit`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include'
-                });
-                if (!transRes.ok) throw new Error('Transmission failed for ' + targetFacId);
-            });
-
-            await Promise.all(promises);
-
-            resultDiv.innerHTML = `<div class="flash flash-success" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.check} Transmitted Successfully!</div>`;
-            setTimeout(() => {
-                document.querySelector('.modal-backdrop')?.remove();
-                loadAlerts();
-            }, 1200);
-
-        } catch (err) {
-            resultDiv.innerHTML = `<div class="flash flash-error" style="margin-bottom:0.5rem; display:flex; align-items:center;">${icons.cross} ${err.message}</div>`;
-            btn.disabled = false;
-            btn.textContent = 'Confirm & Transmit';
-        }
-      };
-
-      window.resolveWithBatch = (id) => {
-        const modal = document.createElement('div');
-        modal.className = 'modal-backdrop';
-        modal.style.display = 'flex';
-        modal.innerHTML = `
-          <div class="modal-box" style="max-width:420px">
-            <div class="modal-header">
-              <h3>Confirm Receipt</h3>
-              <button class="modal-close" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">${icons.cross}</button>
-            </div>
-            <p style="font-size:0.875rem;color:#8492a6;margin-bottom:1rem">
-              Optional: Enter a specific batch number, or leave blank to auto-generate one.
-            </p>
-            <div class="form-group">
-              <label>Batch Number (Optional)</label>
-              <input class="form-control" id="resolve-batch" placeholder="e.g. Leave blank for Auto-Batch" />
-            </div>
-            <div id="resolve-result"></div>
-            <div class="modal-footer">
-              <button class="btn btn-ghost" onclick="event.stopPropagation(); this.closest('.modal-backdrop').remove()">Cancel</button>
-              <button class="btn btn-success" onclick="submitResolve('${id}', this)">${icons.check} Mark Received</button>
-            </div>
-          </div>`;
-        document.body.appendChild(modal);
-      };
-
-      window.submitResolve = async (id, btn) => {
-        // If left blank, backend handles auto-generation.
-        const batch_number = document.getElementById('resolve-batch').value.trim(); 
-        const result = document.getElementById('resolve-result');
-
-        btn.disabled = true;
-        btn.textContent = 'Saving...';
-
-        const res  = await fetch(`/api/alerts/${id}/resolve`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ batch_number, notes: 'Drugs received' }),
+          const transRes = await fetch('/api/alerts/transfer/' + draftData.draft._id + '/transmit', { method: 'PATCH', credentials: 'include' });
+          if (!transRes.ok) throw new Error('Transmission failed');
         });
-        const data = await res.json();
 
-        if (res.ok) {
+        await Promise.all(promises);
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-success"\x3eTransmitted Successfully!\x3c/div\x3e';
+        setTimeout(() => {
           document.querySelector('.modal-backdrop')?.remove();
-          loadAlerts();
-        } else {
-          result.innerHTML = `<div class="flash flash-error" style="margin-top:0.5rem">${data.message || 'Failed to resolve'}</div>`;
-          btn.disabled = false;
-          btn.textContent = '${icons.check} Mark Received';
-        }
-      };
+        }, 1200);
+      } catch (err) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3e' + err.message + '\x3c/div\x3e';
+        btn.disabled = false;
+        btn.textContent = 'Confirm & Transmit';
+      }
+    };
 
-      setInterval(() => {
-        const isInteracting = document.querySelector('.alert-accordion.expanded') || document.querySelector('.modal-backdrop');
-        if (!isInteracting) loadAlerts();
-      }, 15000);
-    });
+    loadAlerts();
+    setInterval(loadAlerts, 15000);

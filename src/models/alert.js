@@ -61,6 +61,7 @@ const alertSchema = new mongoose.Schema({
   },
 
   notes: { type: String, trim: true },
+  is_read:         { type: Boolean, default: false },
 },
 {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },

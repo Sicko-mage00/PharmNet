@@ -1,28 +1,30 @@
-import express from 'express';
-import alertController from '../controllers/alert.js';
-import { protect } from '../middleware/auth.js';
+import express              from 'express';
+import alertController      from '../controllers/alert.js';
+import { protect }          from '../middleware/auth.js';
 
 const alertRoute = express.Router();
 
-// all alert routes — must be logged in
-alertRoute.use(protect); 
+// All routes require auth
+alertRoute.use(protect);
 
-// Existing System Alerts
-alertRoute.get('/',                        alertController.getAlerts);
+// ── GET ───────────────────────────────────────────────
+alertRoute.get('/',                         alertController.getAlerts);
+alertRoute.get('/network-matches',          alertController.getNetworkMatches);
 
-// NEW: Categorization Engine Route (MUST be above /:id routes)
-alertRoute.get('/network-matches',         alertController.getNetworkMatches);
+// ── MARK READ ─────────────────────────────────────────
+// Called when a user opens a drug's chat panel
+alertRoute.patch('/read/:drugName',         alertController.markReadByDrug);
 
-// Existing ID-based Routes
-alertRoute.patch('/:id/confirm',           alertController.confirmAlert);
-alertRoute.patch('/:id/decline',           alertController.declineAlert);
-alertRoute.patch('/:id/self-resolve',      alertController.selfResolve);
-alertRoute.patch('/:id/dispatch',          alertController.dispatchAlert);
-alertRoute.patch('/:id/resolve',           alertController.resolveAlert);
+// ── ALERT LIFECYCLE ───────────────────────────────────
+alertRoute.patch('/:id/confirm',            alertController.confirmAlert);
+alertRoute.patch('/:id/decline',            alertController.declineAlert);
+alertRoute.patch('/:id/self-resolve',       alertController.selfResolve);
+alertRoute.patch('/:id/dispatch',           alertController.dispatchAlert);
+alertRoute.patch('/:id/resolve',            alertController.resolveAlert);
 
-// OPay-Style Inter-Facility Transfers
-alertRoute.post('/transfer/draft',         alertController.createDraftTransfer);
-alertRoute.patch('/transfer/:id/transmit', alertController.transmitTransfer);
-alertRoute.patch('/transfer/:id/revert',   alertController.revertTransfer);
+// ── TRANSFER FLOW ─────────────────────────────────────
+alertRoute.post('/transfer/draft',          alertController.createDraftTransfer);
+alertRoute.patch('/transfer/:id/transmit',  alertController.transmitTransfer);
+alertRoute.patch('/transfer/:id/revert',    alertController.revertTransfer);
 
 export default alertRoute;

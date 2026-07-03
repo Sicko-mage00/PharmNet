@@ -3,7 +3,12 @@ import Drug from '../models/drug.js';
 import Alert from '../models/alert.js'; 
 import { emitAlert } from '../services/socket.js'; 
 
-// ── THE DSS TRIGGER ENGINE (Inventory Hook) ──
+// ── NEW: Pascal Case Formatter ──
+const toTitleCase = (str) => {
+  if (!str) return '';
+  return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+};
+
 const checkAndTriggerAlerts = async (drug, facility_id) => {
     let alerts_created = 0;
 
@@ -90,33 +95,96 @@ const inventoryController = {
 
   addDrug: async (req, res) => {
     try {
-      const { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days, batches } = req.body;
-      if (!drug_name) return res.status(400).json({ message: 'Drug name is required' });
+      let {
+        drug_name,
+        generic_name,
+        barcode,
+        unit,
+        category,
+        reorder_point,
+        expiry_alert_days,
+        batches,
+      } = req.body;
 
-      // Clean up the initial batch if provided
+      if (!drug_name) {
+        return res.status(400).json({
+          message: 'Drug name is required',
+        });
+      }
+
+      drug_name = toTitleCase(drug_name);
+
+      if (generic_name) {
+        generic_name = toTitleCase(generic_name);
+      }
+
       let initialBatches = [];
+
       if (batches && batches.length > 0) {
-         const { batch_number, quantity, expiry_date, unit_price, batch_barcode } = batches[0];
-         initialBatches = [{ batch_number, quantity, expiry_date, unit_price, barcode: batch_barcode }];
+        const {
+          batch_number,
+          quantity,
+          expiry_date,
+          unit_price,
+          batch_barcode,
+        } = batches[0];
+
+        const batchNum =
+          batch_number ||
+          await generateBatchNumber(
+            Drug,
+            req.user.facility_id,
+            drug_name
+          );
+
+        initialBatches = [{
+          batch_number: batchNum,
+          quantity,
+          expiry_date,
+          unit_price,
+          barcode: batch_barcode,
+        }];
       }
 
       const drug = await Drug.create({
-          facility_id: req.user.facility_id,
-          drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days,
-          batches: initialBatches,
-      }); 
+        facility_id: req.user.facility_id,
+        drug_name,
+        generic_name,
+        barcode,
+        unit,
+        category,
+        reorder_point,
+        expiry_alert_days,
+        batches: initialBatches,
+      });
 
-      await checkAndTriggerAlerts(drug, req.user.facility_id);
+      await checkAndTriggerAlerts(
+        drug,
+        req.user.facility_id
+      );
 
-      res.status(201).json({ status: 'success', message: 'Drug added successfully', drug });
+      res.status(201).json({
+        status: 'success',
+        message: 'Drug added successfully',
+        drug,
+      });
+
     } catch (err) {
-      res.status(500).json({ message: 'Server error', error: err.message });
+      res.status(500).json({
+        message: 'Server error',
+        error: err.message,
+      });
     }
   },
 
   updateDrug: async (req, res) => {
     try {
-      const { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days } = req.body;
+      let { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days } = req.body;
+      
+      // Apply Pascal Case formatting
+      drug_name = toTitleCase(drug_name);
+      generic_name = toTitleCase(generic_name);
+
       const drug = await Drug.findOneAndUpdate(
           { _id: req.params.id, facility_id: req.user.facility_id, isActive: true },
           { drug_name, generic_name, barcode, unit, category, reorder_point, expiry_alert_days },
@@ -134,22 +202,66 @@ const inventoryController = {
 
   addBatch: async (req, res) => {
     try {
-      const { batch_number, quantity, expiry_date, unit_price, batch_barcode } = req.body;
-      if (!batch_number || !quantity || !expiry_date) {
-        return res.status(400).json({ message: 'Batch number, quantity, and expiry date are required' });
+      const {
+        batch_number,
+        quantity,
+        expiry_date,
+        unit_price,
+        batch_barcode,
+      } = req.body;
+
+      if (!quantity || !expiry_date) {
+        return res.status(400).json({
+          message: 'Quantity and expiry date are required',
+        });
       }
 
-      const drug = await Drug.findOne({ _id: req.params.id, facility_id: req.user.facility_id, isActive: true });
-      if (!drug) return res.status(404).json({ message: 'Drug not found' });
+      const drug = await Drug.findOne({
+        _id: req.params.id,
+        facility_id: req.user.facility_id,
+        isActive: true,
+      });
 
-      drug.batches.push({ batch_number, quantity, expiry_date, unit_price, barcode: batch_barcode });
+      if (!drug) {
+        return res.status(404).json({
+          message: 'Drug not found',
+        });
+      }
+
+      const batchNum =
+        batch_number ||
+        await generateBatchNumber(
+          Drug,
+          req.user.facility_id,
+          drug.drug_name
+        );
+
+      drug.batches.push({
+        batch_number: batchNum,
+        quantity,
+        expiry_date,
+        unit_price,
+        barcode: batch_barcode,
+      });
+
       await drug.save();
 
-      await checkAndTriggerAlerts(drug, req.user.facility_id);
+      await checkAndTriggerAlerts(
+        drug,
+        req.user.facility_id
+      );
 
-      res.status(200).json({ status: 'success', message: 'Batch added successfully', drug });
+      res.status(200).json({
+        status: 'success',
+        message: 'Batch added successfully',
+        drug,
+      });
+
     } catch (err) {
-      res.status(500).json({ message: 'Server error', error: err.message });
+      res.status(500).json({
+        message: 'Server error',
+        error: err.message,
+      });
     }
   },
 
@@ -187,7 +299,11 @@ const inventoryController = {
     try {
       const drug = await Drug.findOneAndDelete({ _id: req.params.id, facility_id: req.user.facility_id });
       if (!drug) return res.status(404).json({ message: 'Drug not found' });
-      res.status(200).json({ status: 'success', message: 'Drug completely deleted' });
+      
+      // Cascading Delete: Wipe all alerts associated with this deleted drug
+      await Alert.deleteMany({ drug_id: req.params.id });
+
+      res.status(200).json({ status: 'success', message: 'Drug and associated alerts completely deleted' });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
