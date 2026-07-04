@@ -75,10 +75,28 @@ const inventoryController = {
 
   getAllDrugs: async (req, res) => {
     try {
-      const drugs = await Drug.find({ facility_id: req.user.facility_id, isActive: true })
-        .sort({ drug_name: 1 });
+      // 1. SAFEGUARD: If no req.user, the Auth middleware failed to attach it
+      if (!req.user) {
+        console.error("DEBUG: getAllDrugs called but req.user is undefined!");
+        return res.status(401).json({ message: "Unauthorized - Please login again." });
+      }
+
+      console.log("DEBUG: Facility ID for this request:", req.user.facility_id);
+
+      // 2. SAFEGUARD: If facility_id is missing
+      if (!req.user.facility_id) {
+        console.error("DEBUG: req.user exists, but facility_id is missing!");
+        return res.status(400).json({ message: "Facility ID not set in session." });
+      }
+
+      const drugs = await Drug.find({ 
+        facility_id: req.user.facility_id, 
+        isActive: true 
+      }).sort({ drug_name: 1 });
+
       res.status(200).json({ status: 'success', count: drugs.length, drugs });
     } catch (err) {
+      console.error("DEBUG: Inventory DB error:", err);
       res.status(500).json({ message: 'Server error', error: err.message });
     }
   },
@@ -137,26 +155,31 @@ const inventoryController = {
             drug_name
           );
 
-        initialBatches = [{
-          batch_number: batchNum,
-          quantity,
-          expiry_date,
-          unit_price,
-          barcode: batch_barcode,
-        }];
+          initialBatches = [{
+            batch_number: batchNum,
+            quantity,
+            expiry_date,
+            unit_price,
+            ...(batch_barcode && batch_barcode.trim() ? { barcode: batch_barcode.trim() } : {}),
+          }];
       }
 
-      const drug = await Drug.create({
+      const drugData = {
         facility_id: req.user.facility_id,
         drug_name,
         generic_name,
-        barcode,
         unit,
         category,
         reorder_point,
         expiry_alert_days,
         batches: initialBatches,
-      });
+      };
+
+      if (barcode && barcode.trim()) {
+        drugData.barcode = barcode.trim();
+      }
+
+      const drug = await Drug.create(drugData);
 
       await checkAndTriggerAlerts(
         drug,
@@ -170,6 +193,7 @@ const inventoryController = {
       });
 
     } catch (err) {
+      console.error(err); // TEMP - remove after debugging
       res.status(500).json({
         message: 'Server error',
         error: err.message,

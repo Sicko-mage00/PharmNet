@@ -88,11 +88,15 @@ block scripts
         barcode:           document.getElementById('barcode').value.trim() || undefined,
         reorder_point:     parseInt(document.getElementById('reorder_point').value),
         expiry_alert_days: parseInt(document.getElementById('expiry_alert_days').value) || 180,
-        batch_number:      document.getElementById('batch_number').value,
-        quantity:          parseInt(document.getElementById('quantity').value),
-        expiry_date:       document.getElementById('expiry_date').value,
-        unit_price:        parseFloat(document.getElementById('unit_price').value) || null,
-        batch_barcode:     document.getElementById('batch_barcode').value.trim() || undefined,
+        batches: [
+          {
+            batch_number:  document.getElementById('batch_number').value,
+            quantity:      parseInt(document.getElementById('quantity').value),
+            expiry_date:   document.getElementById('expiry_date').value,
+            unit_price:    parseFloat(document.getElementById('unit_price').value) || null,
+            batch_barcode: document.getElementById('batch_barcode').value.trim() || undefined,
+          },
+        ],
       };
 
       try {

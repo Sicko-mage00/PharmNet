@@ -76,12 +76,16 @@ block scripts
         barcode:           document.getElementById('barcode').value,
         reorder_point:     parseInt(document.getElementById('reorder_point').value),
         expiry_alert_days: parseInt(document.getElementById('expiry_alert_days').value),
-        batch_number:      document.getElementById('batch_number').value,
-        quantity:          parseInt(document.getElementById('quantity').value),
-        expiry_date:       document.getElementById('expiry_date').value,
-        unit_price:        parseFloat(document.getElementById('unit_price').value),
+        batches: [
+          {
+            batch_number: document.getElementById('batch_number').value,
+            quantity:     parseInt(document.getElementById('quantity').value),
+            expiry_date:  document.getElementById('expiry_date').value,
+            unit_price:   parseFloat(document.getElementById('unit_price').value),
+            batch_barcode: document.getElementById('batch_barcode').value, // check this ID matches your actual input
+          },
+        ],
       };
-
       try {
         const res = await fetch('/api/inventory', {
           method: 'POST',

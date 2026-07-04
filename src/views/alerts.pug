@@ -156,51 +156,63 @@ block scripts
       let html = '';
       let lastDateGroup = null;
 
-      group.alerts.forEach((a) => {
+      group.alerts.forEach(a => {
         const dateStr = getWhatsAppDateStr(a.created_at);
-
+        
         if (dateStr !== lastDateGroup) {
-          html += '\x3cdiv class="wa-date-sep"\x3e\x3cspan\x3e' + dateStr + '\x3c/span\x3e\x3c/div\x3e';
-          lastDateGroup = dateStr;
+            html += '\x3cdiv class="wa-date-sep"\x3e\x3cspan\x3e' + dateStr + '\x3c/span\x3e\x3c/div\x3e';
+            lastDateGroup = dateStr;
         }
 
         const myFacStr = typeof user !== 'undefined' && user && user.facilityId ? String(user.facilityId) : '';
         const isSource = a.source_facility && String(a.source_facility._id) === myFacStr;
         const isTarget = a.target_facility && String(a.target_facility._id) === myFacStr;
-
+        
         let typeClass = 'transfer';
         let typeLabel = 'NETWORK TRANSFER';
-
+        
         if (!a.isTransfer) {
-          if (a.type === 'ROP') {
-            typeClass = 'rop';
-            typeLabel = 'LOW STOCK (ROP)';
-          } else {
-            typeClass = 'fefo';
-            typeLabel = 'EXPIRING STOCK (FEFO)';
-          }
+            if (a.type === 'ROP') { typeClass = 'rop'; typeLabel = 'LOW STOCK (ROP)'; } 
+            else { typeClass = 'fefo'; typeLabel = 'EXPIRING STOCK (FEFO)'; }
         }
 
         let actionsHtml = '';
         if (!a.isTransfer && a.status === 'pending') {
-          if (a.type === 'ROP') {
-            actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + "', '" + a.drug_name.replace(/'/g, "\\'") + "', " + a.quantity_needed + ", 'Standard Requisition', 'ROP')\"\x3eRequest Stock\x3c/button\x3e" + '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + "','self-resolve')\"\x3eSelf Resolve\x3c/button\x3e";
-          } else {
-            actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + "', '" + a.drug_name.replace(/'/g, "\\'") + "', " + a.quantity_available + ", 'Discounted Offload', 'FEFO')\"\x3ePush Discount\x3c/button\x3e" + '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + "','self-resolve')\"\x3eSelf Resolve\x3c/button\x3e";
-          }
+            if (a.type === 'ROP') {
+                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + '\', \'' + a.drug_name.replace(/'/g, "\\'") + '\', ' + a.quantity_needed + ', \'Standard Requisition\', \'ROP\')"\x3eRequest Stock\x3c/button\x3e' +
+                              '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + '\',\'self-resolve\')"\x3eSelf Resolve\x3c/button\x3e';
+            } else {
+                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + '\', \'' + a.drug_name.replace(/'/g, "\\'") + '\', ' + a.quantity_available + ', \'Discounted Offload\', \'FEFO\')"\x3ePush Discount\x3c/button\x3e' +
+                              '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + '\',\'self-resolve\')"\x3eSelf Resolve\x3c/button\x3e';
+            }
         } else if (a.isTransfer) {
-          if (a.status === 'pending' && isSource) {
-            actionsHtml = '\x3cbutton class="btn btn-success" onclick="doAlert(\'' + a._id + "','confirm')\"\x3eAccept\x3c/button\x3e" + '\x3cbutton class="btn btn-danger" onclick="doAlert(\'' + a._id + "','decline')\"\x3eDecline\x3c/button\x3e";
-          }
-          if (a.status === 'confirmed' && isSource) {
-            actionsHtml = '\x3cbutton class="btn btn-primary" onclick="doAlert(\'' + a._id + "','dispatch')\"\x3eMark Dispatched\x3c/button\x3e";
-          }
-          if (a.status === 'dispatched' && isTarget) {
-            actionsHtml = '\x3cbutton class="btn btn-success" onclick="resolveWithBatch(\'' + a._id + '\')"\x3eConfirm Receipt\x3c/button\x3e';
-          }
+            if (a.status === 'pending' && isSource) {
+                actionsHtml = '\x3cbutton class="btn btn-success" onclick="doAlert(\'' + a._id + '\',\'confirm\')"\x3eAccept\x3c/button\x3e' +
+                              '\x3cbutton class="btn btn-danger" onclick="doAlert(\'' + a._id + '\',\'decline\')"\x3eDecline\x3c/button\x3e';
+            }
+            if (a.status === 'confirmed' && isSource) {
+                actionsHtml = '\x3cbutton class="btn btn-primary" onclick="doAlert(\'' + a._id + '\',\'dispatch\')"\x3eMark Dispatched\x3c/button\x3e';
+            }
+            if (a.status === 'dispatched' && isTarget) {
+                actionsHtml = '\x3cbutton class="btn btn-success" onclick="resolveWithBatch(\'' + a._id + '\')"\x3eConfirm Receipt\x3c/button\x3e';
+            }
         }
 
-        html += '\x3cdiv class="wa-bubble ' + typeClass + '"\x3e' + '\x3cdiv class="wa-bubble-header"\x3e' + '\x3cspan class="wa-bubble-type ' + typeClass + '"\x3e' + typeLabel + '\x3c/span\x3e' + '\x3cspan class="wa-badge-status badge-' + (a.status === 'pending' ? 'pending' : 'resolved') + '"\x3e' + a.status + '\x3c/span\x3e' + '\x3c/div\x3e' + '\x3cdiv class="wa-bubble-body"\x3e' + (a.notes || 'System Alert triggered.') + (a.quantity_available ? '\x3cbr\x3e\x3cspan style="color:#64748b; display:inline-block; margin-top:4px;"\x3eAvailable: ' + a.quantity_available + '\x3c/span\x3e' : '') + '\x3c/div\x3e' + (actionsHtml ? '\x3cdiv class="wa-bubble-actions"\x3e' + actionsHtml + '\x3c/div\x3e' : '') + '\x3cdiv class="wa-bubble-footer"\x3e' + '\x3cspan class="wa-bubble-time"\x3e' + formatTime(a.created_at) + '\x3c/span\x3e' + '\x3c/div\x3e' + '\x3c/div\x3e';
+        // ── PREMIUM CARD-STYLE BUBBLE ──
+        html += '\x3cdiv class="wa-bubble ' + typeClass + '"\x3e' +
+                  '\x3cdiv class="wa-bubble-header"\x3e' +
+                    '\x3cspan class="wa-bubble-type ' + typeClass + '"\x3e' + typeLabel + '\x3c/span\x3e' +
+                    '\x3cspan class="wa-badge-status badge-' + (a.status === 'pending' ? 'pending' : 'resolved') + '"\x3e' + a.status + '\x3c/span\x3e' +
+                  '\x3c/div\x3e' +
+                  '\x3cdiv class="wa-bubble-body"\x3e' +
+                     '\x3cp style="margin-bottom: 8px;"\x3e' + (a.notes || 'System Alert triggered.') + '\x3c/p\x3e' +
+                     (a.quantity_available ? '\x3cdiv style="display:inline-block; background:#f8fafc; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight:600; color:#475569; border: 1px solid #e2e8f0;"\x3eAvailable: ' + a.quantity_available + ' units\x3c/div\x3e' : '') +
+                  '\x3c/div\x3e' +
+                  (actionsHtml ? '\x3cdiv class="wa-bubble-actions"\x3e' + actionsHtml + '\x3c/div\x3e' : '') +
+                  '\x3cdiv class="wa-bubble-footer"\x3e' +
+                     '\x3cspan class="wa-bubble-time"\x3e' + formatTime(a.created_at) + '\x3c/span\x3e' +
+                  '\x3c/div\x3e' +
+                '\x3c/div\x3e';
       });
 
       messagesDiv.innerHTML = html;
