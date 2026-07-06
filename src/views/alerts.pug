@@ -2,8 +2,15 @@ extends layout
 
 block content
   .wa-container
-    //- LEFT PANEL: Contact List (No tabs)
+    //- LEFT PANEL: Contact List
     #wa-sidebar.wa-sidebar
+      .wa-tabs
+        button.wa-tab.active#tab-internal(onclick='switchTab("internal")')
+          | Internal
+          span#tab-internal-count
+        button.wa-tab#tab-external(onclick='switchTab("external")')
+          | External
+          span#tab-external-count
       #wa-chat-list.wa-chat-list
         .loader(style='margin-top: 2rem')
           .spinner
@@ -40,10 +47,22 @@ block content
 block scripts
   script.
     // ── GLOBALS & STATE ──
-    let allAlerts = [];
+    let internalAlerts = [];
+    let externalAlerts = [];
+    let activeTab = 'internal';
     let groupedAlerts = {};
     let activeChatKey = null;
     const user = typeof getUser === 'function' ? getUser() : null;
+
+    window.switchTab = (tab) => {
+      activeTab = tab;
+      document.getElementById('tab-internal').classList.toggle('active', tab === 'internal');
+      document.getElementById('tab-external').classList.toggle('active', tab === 'external');
+      activeChatKey = null;
+      closeChat();
+      buildGroups();
+      renderList();
+    };
 
     // ── ICONS (ESCAPED) ──
     const icons = {
@@ -76,34 +95,45 @@ block scripts
       try {
         const r = await fetch('/api/alerts', { credentials: 'include' });
         const data = await r.json();
-        allAlerts = data.alerts || [];
+        internalAlerts = (data.internal && data.internal.items) || [];
+        externalAlerts = (data.external && data.external.items) || [];
 
-        groupedAlerts = {};
-        allAlerts.forEach((a) => {
-          const key = a.drug_name || 'System Alert';
-          if (!groupedAlerts[key]) {
-            groupedAlerts[key] = { drugName: key, alerts: [], unread: 0, latestTime: new Date(0), latestMsg: '' };
-          }
-          groupedAlerts[key].alerts.push(a);
-        });
+        document.getElementById('tab-internal-count').textContent =
+          internalAlerts.filter(a => !a.resolved).length > 0 ? ' (' + internalAlerts.filter(a => !a.resolved).length + ')' : '';
+        document.getElementById('tab-external-count').textContent =
+          externalAlerts.filter(a => !a.resolved).length > 0 ? ' (' + externalAlerts.filter(a => !a.resolved).length + ')' : '';
 
-        for (const key in groupedAlerts) {
-          const group = groupedAlerts[key];
-          group.alerts.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-
-          const latest = group.alerts[group.alerts.length - 1];
-          group.latestTime = new Date(latest.created_at);
-
-          if (latest.isTransfer) group.latestMsg = 'Network Transfer';
-          else if (latest.type === 'ROP') group.latestMsg = 'Low Stock (ROP)';
-          else group.latestMsg = 'Expiring Stock (FEFO)';
-
-          group.unread = group.alerts.filter((a) => a.status === 'pending' && !a.is_read).length;
-        }
+        buildGroups();
         renderList();
         if (activeChatKey) openChat(activeChatKey, true);
       } catch (err) {
         document.getElementById('wa-chat-list').innerHTML = '\x3cdiv class="flash flash-error"\x3eFailed to load alerts\x3c/div\x3e';
+      }
+    };
+
+    const buildGroups = () => {
+      const source = activeTab === 'internal' ? internalAlerts : externalAlerts;
+      groupedAlerts = {};
+      source.forEach((a) => {
+        const key = a.drug_name || 'System Alert';
+        if (!groupedAlerts[key]) {
+          groupedAlerts[key] = { drugName: key, alerts: [], unread: 0, latestTime: new Date(0), latestMsg: '' };
+        }
+        groupedAlerts[key].alerts.push(a);
+      });
+
+      for (const key in groupedAlerts) {
+        const group = groupedAlerts[key];
+        group.alerts.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+        const latest = group.alerts[group.alerts.length - 1];
+        group.latestTime = new Date(latest.created_at);
+
+        if (latest.isTransfer) group.latestMsg = 'Network Transfer';
+        else if (latest.type === 'ROP') group.latestMsg = 'Low Stock (ROP)';
+        else group.latestMsg = 'Expiring Stock (FEFO)';
+
+        group.unread = group.alerts.filter((a) => !a.isTransfer && a.status === 'pending' && !a.is_read).length;
       }
     };
 
@@ -176,25 +206,56 @@ block scripts
             else { typeClass = 'fefo'; typeLabel = 'EXPIRING STOCK (FEFO)'; }
         }
 
+        // ── STATUS BADGE (was previously just pending/resolved — now reflects
+        //    the actual status so declined/expired/cancelled don't get
+        //    mislabeled with a green "resolved" badge) ──
+        const statusBadgeMap = {
+          pending: 'pending', confirmed: 'confirmed', dispatched: 'dispatched',
+          resolved: 'resolved', self_resolved: 'resolved', declined: 'declined',
+          expired: 'expired', cancelled: 'cancelled',
+          'Draft': 'pending', 'Pending Approval': 'pending', 'Accepted': 'confirmed',
+          'Dispatched': 'dispatched', 'Completed': 'resolved', 'Rejected': 'declined',
+          'Reverted': a.revert_reason === 'auto_cancelled_broadcast' ? 'cancelled' : (a.revert_reason === 'expired' ? 'expired' : 'declined'),
+        };
+        const badgeClass = statusBadgeMap[a.status] || 'pending';
+        const statusLabel = a.status === 'Reverted'
+          ? (a.revert_reason === 'auto_cancelled_broadcast' ? 'fulfilled elsewhere' : (a.revert_reason || 'reverted'))
+          : a.status;
+
         let actionsHtml = '';
-        if (!a.isTransfer && a.status === 'pending') {
+        if (a.resolved) {
+          // Nothing further to do — no action buttons, resolved state speaks for itself.
+        } else if (!a.isTransfer && a.status === 'pending') {
             if (a.type === 'ROP') {
                 actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + '\', \'' + a.drug_name.replace(/'/g, "\\'") + '\', ' + a.quantity_needed + ', \'Standard Requisition\', \'ROP\')"\x3eRequest Stock\x3c/button\x3e' +
                               '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + '\',\'self-resolve\')"\x3eSelf Resolve\x3c/button\x3e';
             } else {
-                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + '\', \'' + a.drug_name.replace(/'/g, "\\'") + '\', ' + a.quantity_available + ', \'Discounted Offload\', \'FEFO\')"\x3ePush Discount\x3c/button\x3e' +
+                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="quickListMarketplace(\'' + a.drug_id._id + '\', ' + a.quantity_available + ')"\x3eList on Marketplace\x3c/button\x3e' +
                               '\x3cbutton class="btn btn-action-secondary" onclick="doAlert(\'' + a._id + '\',\'self-resolve\')"\x3eSelf Resolve\x3c/button\x3e';
             }
+        } else if (!a.isTransfer && a.stillUnresolved) {
+            // Alert timed out — still unresolved, nudge to try the network again
+            // rather than let it look like a dead end.
+            const qty = a.quantity_needed || a.quantity_available || 0;
+            if (a.type === 'FEFO') {
+                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="quickListMarketplace(\'' + a.drug_id._id + '\', ' + qty + ')"\x3eStill expiring \u2014 List on Marketplace\x3c/button\x3e';
+            } else {
+                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + a.drug_id._id + '\', \'' + a.drug_name.replace(/'/g, "\\'") + '\', ' + qty + ', \'Standard Requisition\', \'ROP\')"\x3eStill needed \u2014 Request Again\x3c/button\x3e';
+            }
         } else if (a.isTransfer) {
-            if (a.status === 'pending' && isSource) {
+            if (a.status === 'Pending Approval' && isSource) {
                 actionsHtml = '\x3cbutton class="btn btn-success" onclick="doAlert(\'' + a._id + '\',\'confirm\')"\x3eAccept\x3c/button\x3e' +
                               '\x3cbutton class="btn btn-danger" onclick="doAlert(\'' + a._id + '\',\'decline\')"\x3eDecline\x3c/button\x3e';
             }
-            if (a.status === 'confirmed' && isSource) {
+            if (a.status === 'Accepted' && isSource) {
                 actionsHtml = '\x3cbutton class="btn btn-primary" onclick="doAlert(\'' + a._id + '\',\'dispatch\')"\x3eMark Dispatched\x3c/button\x3e';
             }
-            if (a.status === 'dispatched' && isTarget) {
+            if (a.status === 'Dispatched' && isTarget) {
                 actionsHtml = '\x3cbutton class="btn btn-success" onclick="resolveWithBatch(\'' + a._id + '\')"\x3eConfirm Receipt\x3c/button\x3e';
+            }
+            if (a.stillUnresolved && isTarget) {
+                // Declined or timed out — requester can broadcast to the network again.
+                actionsHtml = '\x3cbutton class="btn btn-action-primary" onclick="openNetworkModal(\'' + (a.drug_id && a.drug_id._id) + '\', \'' + a.drug_name.replace(/'/g, "\\'") + '\', ' + a.quantity_available + ', \'' + a.transactionType + '\', \'ROP\')"\x3eStill needed \u2014 Request Again\x3c/button\x3e';
             }
         }
 
@@ -202,7 +263,7 @@ block scripts
         html += '\x3cdiv class="wa-bubble ' + typeClass + '"\x3e' +
                   '\x3cdiv class="wa-bubble-header"\x3e' +
                     '\x3cspan class="wa-bubble-type ' + typeClass + '"\x3e' + typeLabel + '\x3c/span\x3e' +
-                    '\x3cspan class="wa-badge-status badge-' + (a.status === 'pending' ? 'pending' : 'resolved') + '"\x3e' + a.status + '\x3c/span\x3e' +
+                    '\x3cspan class="wa-badge-status badge-' + badgeClass + '"\x3e' + statusLabel + '\x3c/span\x3e' +
                   '\x3c/div\x3e' +
                   '\x3cdiv class="wa-bubble-body"\x3e' +
                      '\x3cp style="margin-bottom: 8px;"\x3e' + (a.notes || 'System Alert triggered.') + '\x3c/p\x3e' +
@@ -282,29 +343,86 @@ block scripts
       document.body.appendChild(modal);
 
       try {
-        const res = await fetch('/api/alerts/network-matches?drugName=' + encodeURIComponent(drugName) + '&type=' + alertType, { credentials: 'include' });
-        const responseData = await res.json();
-        if (!res.ok) throw new Error(responseData.message);
+        const [matchRes, drugRes] = await Promise.all([
+          fetch('/api/alerts/network-matches?drugName=' + encodeURIComponent(drugName) + '&type=' + alertType, { credentials: 'include' }),
+          fetch('/api/inventory/' + drugId, { credentials: 'include' }),
+        ]);
+        const responseData = await matchRes.json();
+        if (!matchRes.ok) throw new Error(responseData.message);
+
+        let safeMargins = [];
+        if (drugRes.ok) {
+          const drugData = await drugRes.json();
+          safeMargins = drugData.safeMargins || [];
+        }
 
         const { priorityMatches, recommended, openNetwork } = responseData.data;
         const inputType = alertType === 'ROP' ? 'checkbox' : 'radio';
-        const instructionText = alertType === 'ROP' ? 'Select facilities to request from.' : 'Select ONE facility to offer your discounted stock to.';
+        const instructionText = alertType === 'ROP'
+          ? 'Select up to 4 facilities to request from \u2014 whoever accepts first fulfills the request, the rest auto-cancel.'
+          : 'Select ONE facility to offer your discounted stock to.';
 
-        const buildList = (facilities, isPriority = false) => facilities.map((f) => '\x3cdiv class="network-match-card ' + (isPriority ? 'priority-match-card' : '') + '"\x3e' + '\x3cinput type="' + inputType + '" name="facilitySelection" value="' + f.facilityId + '" id="fac-' + f.facilityId + '" data-type="' + f.transactionType + '" class="network-match-checkbox"\x3e' + '\x3clabel for="fac-' + f.facilityId + '" class="network-match-info" style="cursor: pointer; margin: 0;"\x3e' + '\x3cstrong\x3e' + f.name + '\x3c/strong\x3e\x3cspan\x3e' + f.tier + ' • ' + f.state + ' (' + f.lga + ')\x3c/span\x3e' + '\x3clabel\x3e' + '\x3cspan class="badge badge-' + (isPriority ? 'warning' : 'success') + ' network-match-status"\x3e' + f.statusText + '\x3c/span\x3e' + '\x3c/div\x3e').join('');
+        const buildList = (facilities, isPriority = false) => facilities.map((f) => '\x3cdiv class="network-match-card ' + (isPriority ? 'priority-match-card' : '') + '"\x3e' + '\x3cinput type="' + inputType + '" name="facilitySelection" value="' + f.facilityId + '" id="fac-' + f.facilityId + '" data-type="' + f.transactionType + '" class="network-match-checkbox" onchange="enforceFacilityLimit()"\x3e' + '\x3clabel for="fac-' + f.facilityId + '" class="network-match-info" style="cursor: pointer; margin: 0;"\x3e' + '\x3cstrong\x3e' + f.name + '\x3c/strong\x3e\x3cspan\x3e' + (f.tierLabel || f.tier) + (f.city ? ' \u00b7 ' + f.city : '') + (f.state ? ', ' + f.state : '') + '\x3c/span\x3e' + '\x3c/label\x3e' + '\x3cspan class="badge badge-' + (isPriority ? 'warning' : 'success') + ' network-match-status"\x3e' + f.statusText + '\x3c/span\x3e' + '\x3c/div\x3e').join('');
 
-        modal.querySelector('.modal-box').innerHTML = '\x3cdiv class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;"\x3e' + '\x3ch3 style="color: #333;"\x3eConfirm Transaction Details\x3c/h3\x3e' + '\x3cbutton class="modal-close" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3e' + icons.cross + '\x3c/button\x3e' + '\x3c/div\x3e' + '\x3cdiv class="modal-body" style="padding: 15px 0; max-height: 60vh; overflow-y: auto;"\x3e' + '\x3cp style="font-size:0.9rem; color:#8492a6; margin-bottom: 15px;"\x3e' + instructionText + '\x3c/p\x3e' + '\x3cdiv style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;"\x3e' + '\x3cp style="margin-bottom: 8px;"\x3e\x3cstrong\x3eDrug:\x3c/strong\x3e ' + drugName + '\x3c/p\x3e' + '\x3cp style="margin-bottom: 8px;"\x3e\x3cstrong\x3eQuantity:\x3c/strong\x3e ' + defaultQty + '\x3c/p\x3e' + '\x3cdiv style="margin-top: 10px;"\x3e' + '\x3clabel style="font-size: 0.85rem; font-weight: bold;"\x3eConfirm Unit Metric:\x3c/label\x3e' + '\x3cselect class="form-control" id="draft-unit" style="margin-top: 4px;"\x3e' + '\x3coption value="Carton"\x3eCarton\x3c/option\x3e\x3coption value="Roll"\x3eRoll\x3c/option\x3e\x3coption value="Pack" selected\x3ePack\x3c/option\x3e\x3coption value="Card"\x3eCard\x3c/option\x3e\x3coption value="Bottle"\x3eBottle\x3c/option\x3e\x3coption value="Pieces"\x3ePieces\x3c/option\x3e' + '\x3c/select\x3e' + '\x3c/div\x3e' + '\x3c/div\x3e' + (priorityMatches && priorityMatches.length > 0 ? '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-bottom: 10px; color: #c05621;"\x3ePriority Matches (Waste vs Want)\x3c/h4\x3e' + buildList(priorityMatches, true) : '') + '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #2b6cb0;"\x3eRecommended Network Matches\x3c/h4\x3e' + (recommended.length > 0 ? buildList(recommended) : '\x3cp style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 15px;"\x3eNo standard peer-tier facilities found in your state.\x3c/p\x3e') + '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #4a5568;"\x3eOpen Network Directory\x3c/h4\x3e' + (openNetwork.length > 0 ? buildList(openNetwork) : '\x3cp style="font-size: 0.85rem; color: #a0aec0;"\x3eNo additional facilities available.\x3c/p\x3e') + '\x3c/div\x3e' + '\x3cdiv id="transfer-result"\x3e\x3c/div\x3e' + '\x3cdiv class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px; display: flex; justify-content: flex-end; gap: 10px;"\x3e' + '\x3cbutton class="btn btn-ghost" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e' + '\x3cbutton class="btn btn-success" style="width: 250px; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers(\'' + drugId + "', " + defaultQty + ', this)"\x3eConfirm & Transmit\x3c/button\x3e' + '\x3c/div\x3e';
+        const marginPickerHtml = safeMargins.length
+          ? '\x3clabel style="font-size: 0.85rem; font-weight: bold;"\x3eQuantity:\x3c/label\x3e' +
+            '\x3cdiv style="display:flex; gap:6px; flex-wrap:wrap; margin: 6px 0 10px;"\x3e' +
+            safeMargins.map((m, i) => '\x3cbutton type="button" class="btn btn-sm ' + (i === 0 ? 'btn-primary' : 'btn-ghost') + ' margin-preset-btn" data-qty="' + m.quantity + '" onclick="selectMarginPreset(this, ' + m.quantity + ')" title="' + m.description + '"\x3e' + m.label + ' (' + m.quantity + ')\x3c/button\x3e').join('') +
+            '\x3cbutton type="button" class="btn btn-sm btn-ghost margin-preset-btn active-custom" data-qty="custom" onclick="selectMarginPreset(this, \'custom\')"\x3eCustom\x3c/button\x3e' +
+            '\x3c/div\x3e' +
+            '\x3cinput type="number" class="form-control" id="draft-qty" value="' + defaultQty + '" min="1" /\x3e'
+          : '\x3clabel style="font-size: 0.85rem; font-weight: bold;"\x3eQuantity:\x3c/label\x3e\x3cinput type="number" class="form-control" id="draft-qty" value="' + defaultQty + '" min="1" style="margin-top:4px;" /\x3e';
+
+        modal.querySelector('.modal-box').innerHTML = '\x3cdiv class="modal-header" style="border-bottom: 1px solid #eee; padding-bottom: 10px;"\x3e' + '\x3ch3 style="color: #333;"\x3eConfirm Transaction Details\x3c/h3\x3e' + '\x3cbutton class="modal-close" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3e' + icons.cross + '\x3c/button\x3e' + '\x3c/div\x3e' + '\x3cdiv class="modal-body" style="padding: 15px 0; max-height: 60vh; overflow-y: auto;"\x3e' + '\x3cp style="font-size:0.9rem; color:#8492a6; margin-bottom: 15px;"\x3e' + instructionText + '\x3c/p\x3e' + '\x3cdiv style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;"\x3e' + '\x3cp style="margin-bottom: 8px;"\x3e\x3cstrong\x3eDrug:\x3c/strong\x3e ' + drugName + '\x3c/p\x3e' + marginPickerHtml + '\x3cdiv style="margin-top: 10px;"\x3e' + '\x3clabel style="font-size: 0.85rem; font-weight: bold;"\x3eConfirm Unit Metric:\x3c/label\x3e' + '\x3cselect class="form-control" id="draft-unit" style="margin-top: 4px;"\x3e' + '\x3coption value="Carton"\x3eCarton\x3c/option\x3e\x3coption value="Roll"\x3eRoll\x3c/option\x3e\x3coption value="Pack" selected\x3ePack\x3c/option\x3e\x3coption value="Card"\x3eCard\x3c/option\x3e\x3coption value="Bottle"\x3eBottle\x3c/option\x3e\x3coption value="Pieces"\x3ePieces\x3c/option\x3e' + '\x3c/select\x3e' + '\x3c/div\x3e' + '\x3c/div\x3e' + (priorityMatches && priorityMatches.length > 0 ? '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-bottom: 10px; color: #c05621;"\x3ePriority Matches (Waste vs Want)\x3c/h4\x3e' + buildList(priorityMatches, true) : '') + '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #2b6cb0;"\x3eRecommended Network Matches\x3c/h4\x3e' + (recommended.length > 0 ? buildList(recommended) : '\x3cp style="font-size: 0.85rem; color: #a0aec0; margin-bottom: 15px;"\x3eNo standard peer-tier facilities found in your state.\x3c/p\x3e') + '\x3ch4 style="display: flex; align-items: center; font-size: 1rem; margin-top: 20px; margin-bottom: 10px; color: #4a5568;"\x3eOpen Network Directory\x3c/h4\x3e' + (openNetwork.length > 0 ? buildList(openNetwork) : '\x3cp style="font-size: 0.85rem; color: #a0aec0;"\x3eNo additional facilities available.\x3c/p\x3e') + '\x3c/div\x3e' + '\x3cdiv id="transfer-result"\x3e\x3c/div\x3e' + '\x3cdiv class="modal-footer" style="border-top: 1px solid #eee; padding-top: 15px; display: flex; justify-content: flex-end; gap: 10px;"\x3e' + '\x3cbutton class="btn btn-ghost" onclick="event.stopPropagation(); this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e' + '\x3cbutton class="btn btn-success" style="width: 250px; font-weight: bold; font-size: 1.05rem;" onclick="submitNetworkTransfers(\'' + drugId + '\', this)"\x3eConfirm & Transmit\x3c/button\x3e' + '\x3c/div\x3e';
       } catch (err) {
         modal.querySelector('.modal-body').innerHTML = '\x3cdiv class="flash flash-error"\x3e' + (err.message || 'Failed to fetch network directory.') + '\x3c/div\x3e';
       }
     };
 
-    window.submitNetworkTransfers = async (drugId, defaultQty, btn) => {
+    window.selectMarginPreset = (btn, qty) => {
+      document.querySelectorAll('.margin-preset-btn').forEach(b => b.classList.replace('btn-primary', 'btn-ghost'));
+      btn.classList.replace('btn-ghost', 'btn-primary');
+      const qtyInput = document.getElementById('draft-qty');
+      if (qty !== 'custom') {
+        qtyInput.value = qty;
+        qtyInput.readOnly = true;
+      } else {
+        qtyInput.readOnly = false;
+        qtyInput.focus();
+      }
+    };
+
+    // ROP requests can broadcast to up to 4 facilities at once — enforce
+    // that limit live as checkboxes are ticked (FEFO is a radio, so it's
+    // already single-select and doesn't need this).
+    window.enforceFacilityLimit = () => {
+      const checked = document.querySelectorAll('input[name="facilitySelection"]:checked');
+      const all = document.querySelectorAll('input[name="facilitySelection"][type="checkbox"]');
+      if (checked.length >= 4) {
+        all.forEach(cb => { if (!cb.checked) cb.disabled = true; });
+      } else {
+        all.forEach(cb => { cb.disabled = false; });
+      }
+    };
+
+    window.submitNetworkTransfers = async (drugId, btn) => {
       const resultDiv = document.getElementById('transfer-result');
       const unit = document.getElementById('draft-unit').value;
+      const quantityRequested = Number(document.getElementById('draft-qty').value);
       const selectedInputs = document.querySelectorAll('input[name="facilitySelection"]:checked');
+      const marginBtn = document.querySelector('.margin-preset-btn.btn-primary');
+      const marginLabel = marginBtn ? marginBtn.textContent.replace(/\s*\(\d+\)$/, '') : 'Custom';
 
       if (selectedInputs.length === 0) {
         resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3ePlease select at least one facility.\x3c/div\x3e';
+        return;
+      }
+      if (selectedInputs.length > 4) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3eYou can request from at most 4 facilities at once.\x3c/div\x3e';
+        return;
+      }
+      if (!quantityRequested || quantityRequested <= 0) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3ePlease enter a valid quantity.\x3c/div\x3e';
         return;
       }
 
@@ -312,29 +430,77 @@ block scripts
       btn.textContent = 'Transmitting...';
 
       try {
-        const promises = Array.from(selectedInputs).map(async (input) => {
-          const draftRes = await fetch('/api/alerts/transfer/draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ providerFacilityId: input.value, drugId: drugId, quantityRequested: defaultQty, unit: unit, transactionType: input.getAttribute('data-type') }),
-          });
-          const draftData = await draftRes.json();
-          if (!draftRes.ok) throw new Error(draftData.message);
+        const providerFacilityIds = Array.from(selectedInputs).map(i => i.value);
+        const transactionType = selectedInputs[0].getAttribute('data-type');
 
-          const transRes = await fetch('/api/alerts/transfer/' + draftData.draft._id + '/transmit', { method: 'PATCH', credentials: 'include' });
-          if (!transRes.ok) throw new Error('Transmission failed');
+        const draftRes = await fetch('/api/alerts/transfer/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ providerFacilityIds, drugId, quantityRequested, unit, transactionType, marginLabel }),
         });
+        const draftData = await draftRes.json();
+        if (!draftRes.ok) throw new Error(draftData.message);
 
-        await Promise.all(promises);
-        resultDiv.innerHTML = '\x3cdiv class="flash flash-success"\x3eTransmitted Successfully!\x3c/div\x3e';
+        const transRes = await fetch('/api/alerts/transfer/broadcast/' + draftData.broadcast_id + '/transmit', {
+          method: 'PATCH',
+          credentials: 'include',
+        });
+        const transData = await transRes.json();
+        if (!transRes.ok) throw new Error(transData.message);
+
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-success"\x3e' + transData.message + '\x3c/div\x3e';
         setTimeout(() => {
           document.querySelector('.modal-backdrop')?.remove();
+          loadAlerts();
         }, 1200);
       } catch (err) {
         resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3e' + err.message + '\x3c/div\x3e';
         btn.disabled = false;
         btn.textContent = 'Confirm & Transmit';
+      }
+    };
+
+    window.quickListMarketplace = (drugId, defaultQty) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = '\x3cdiv class="modal-box"\x3e' +
+        '\x3cdiv class="modal-header"\x3e\x3ch3\x3eList on Network Marketplace\x3c/h3\x3e\x3cbutton class="modal-close" onclick="this.closest(\'.modal-backdrop\').remove()"\x3e' + icons.cross + '\x3c/button\x3e\x3c/div\x3e' +
+        '\x3cp style="font-size:0.85rem; color:#8492a6; margin-bottom:10px;"\x3eThis lists the expiring batch network-wide \u2014 any facility can browse and buy it in units, not just the ones you\u2019d pick manually.\x3c/p\x3e' +
+        '\x3cdiv class="form-group"\x3e\x3clabel\x3eQuantity to list\x3c/label\x3e\x3cinput type="number" class="form-control" id="quick-list-qty" min="1" value="' + defaultQty + '" /\x3e\x3c/div\x3e' +
+        '\x3cdiv class="form-group"\x3e\x3clabel\x3eUnit Price (0 for free offload)\x3c/label\x3e\x3cinput type="number" class="form-control" id="quick-list-price" min="0" value="0" /\x3e\x3c/div\x3e' +
+        '\x3cdiv id="quick-list-result"\x3e\x3c/div\x3e' +
+        '\x3cdiv class="modal-footer"\x3e\x3cbutton class="btn btn-ghost" onclick="this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e\x3cbutton class="btn btn-primary" onclick="submitQuickList(\'' + drugId + '\', this)"\x3eList It\x3c/button\x3e\x3c/div\x3e' +
+      '\x3c/div\x3e';
+      document.body.appendChild(modal);
+    };
+
+    window.submitQuickList = async (drugId, btn) => {
+      const quantity = Number(document.getElementById('quick-list-qty').value);
+      const unit_price = Number(document.getElementById('quick-list-price').value) || 0;
+      const resultDiv = document.getElementById('quick-list-result');
+      if (!quantity || quantity <= 0) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3eEnter a valid quantity\x3c/div\x3e';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Listing...';
+      try {
+        const res = await fetch('/api/marketplace', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ drugId, quantity, unit_price }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-success"\x3eListed on the marketplace\x3c/div\x3e';
+        setTimeout(() => document.querySelector('.modal-backdrop')?.remove(), 1000);
+      } catch (err) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3e' + err.message + '\x3c/div\x3e';
+        btn.disabled = false;
+        btn.textContent = 'List It';
       }
     };
 

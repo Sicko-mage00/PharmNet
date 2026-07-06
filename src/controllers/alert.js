@@ -6,6 +6,14 @@ import Facility from '../models/facility.js';
 
 import { emitAlert, getIO } from '../services/socket.js';
 import { getCategorizedMatches } from '../services/matcher.js';
+import { validateCustomQuantity } from '../services/quantityMargins.js';
+import {
+  alertChannel,
+  isAlertResolved,
+  isTransferResolved,
+  isAlertStillUnresolved,
+  isTransferStillUnresolved,
+} from '../services/alertStatus.js';
 
 const alertController = {
   // ─── MARK ALERTS AS READ BY DRUG NAME ─────────────────
@@ -30,8 +38,10 @@ const alertController = {
     }
   },
 
-  // ─── GET ALL ALERTS (DUAL-FETCH ENGINE) ───────────────
+  // ─── GET ALL ALERTS (DUAL-CHANNEL: INTERNAL + EXTERNAL) ──
   // GET /api/alerts
+  // Internal  = self-generated ROP/FEFO alerts about this facility's own stock.
+  // External  = network Transfers (requests sent to/received from other facilities).
   getAlerts: async (req, res) => {
     try {
       const facility_id = req.user.facility_id;
@@ -45,14 +55,73 @@ const alertController = {
         created_at: { $gte: twoWeeksAgo },
       })
         .populate('drug_id', 'drug_name unit')
-        .populate('source_facility', 'name location')
-        .populate('target_facility', 'name location')
-        .sort({ created_at: -1 }); // Keep sorted chronologically so frontend can group them properly
+        .populate('source_facility', 'name')
+        .populate('target_facility', 'name')
+        .sort({ created_at: -1 });
+
+      const transfers = await Transfer.find({
+        $or: [
+          { requesterFacility: facility_id },
+          { providerFacility: facility_id },
+        ],
+        createdAt: { $gte: twoWeeksAgo },
+      })
+        .populate('drugId', 'drug_name unit')
+        .populate('requesterFacility', 'name')
+        .populate('providerFacility', 'name')
+        .sort({ createdAt: -1 });
+
+      const alertItems = alerts.map((a) => ({
+        ...a.toObject({ virtuals: true }),
+        channel: alertChannel(a),
+        resolved: isAlertResolved(a),
+        stillUnresolved: isAlertStillUnresolved(a),
+      }));
+
+      const internalAlertItems = alertItems.filter((a) => a.channel === 'internal');
+      const externalAlertItems = alertItems.filter((a) => a.channel === 'external');
+
+      // Normalize Transfers into the same bubble shape the frontend already
+      // uses for Alerts, so both channels render through one code path.
+      // providerFacility (who supplies) maps to source_facility (who fulfills);
+      // requesterFacility (who needs stock) maps to target_facility (who receives) —
+      // same convention as internal Alerts.
+      const transferItems = transfers.map((t) => ({
+        _id: t._id,
+        isTransfer: true,
+        type: 'TRANSFER',
+        drug_name: t.drugId ? t.drugId.drug_name : 'Network Transfer',
+        drug_id: t.drugId,
+        status: t.status,
+        revert_reason: t.revert_reason,
+        notes: t.notes || `${t.transactionType} \u2014 ${t.quantityRequested} ${t.unit}`,
+        quantity_available: t.quantityRequested,
+        source_facility: t.providerFacility,
+        target_facility: t.requesterFacility,
+        created_at: t.createdAt,
+        broadcast_id: t.broadcast_id,
+        marginLabel: t.marginLabel,
+        transactionType: t.transactionType,
+        revertWindowEndsAt: t.revertWindowEndsAt,
+        resolved: isTransferResolved(t),
+        stillUnresolved: isTransferStillUnresolved(t),
+      }));
+
+      const externalItems = [...externalAlertItems, ...transferItems].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at),
+      );
+
+      // Flat merged array kept for back-compat with existing frontend code
+      // (main.js's notification bell counter reads data.alerts directly).
+      const combined = [...internalAlertItems, ...externalItems].sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at),
+      );
 
       res.status(200).json({
         status: 'success',
-        count: alerts.length,
-        alerts,
+        alerts: combined,
+        internal: { count: internalAlertItems.length, items: internalAlertItems },
+        external: { count: externalItems.length, items: externalItems },
       });
     } catch (err) {
       res.status(500).json({
@@ -141,6 +210,39 @@ const alertController = {
         transfer,
       });
 
+      // ─── BROADCAST AUTO-CANCEL ─────────────────────────
+      // If this transfer was part of a multi-facility broadcast (the
+      // requester sent the same request to up to 4 facilities at once),
+      // whoever accepts first wins — every sibling transfer still
+      // awaiting a response gets auto-reverted, and those provider
+      // facilities are notified immediately so the request disappears
+      // from their action queue instead of sitting there stale.
+      if (transfer.broadcast_id) {
+        const siblings = await Transfer.find({
+          broadcast_id: transfer.broadcast_id,
+          _id: { $ne: transfer._id },
+          status: { $in: ['Pending Approval', 'Draft'] },
+        });
+
+        if (siblings.length) {
+          await Transfer.updateMany(
+            { _id: { $in: siblings.map((s) => s._id) } },
+            {
+              status: 'Reverted',
+              revert_reason: 'auto_cancelled_broadcast',
+              notes: 'Auto-cancelled — another facility already accepted this request',
+            },
+          );
+
+          for (const sib of siblings) {
+            io.to(sib.providerFacility.toString()).emit('transfer_auto_cancelled', {
+              message: 'This request was already fulfilled by another facility',
+              transferId: sib._id,
+            });
+          }
+        }
+      }
+
       return res.status(200).json({
         status: 'success',
         message: 'Network Transfer accepted — arrange dispatch',
@@ -176,13 +278,17 @@ const alertController = {
           providerFacility: req.user.facility_id,
           status: 'Pending Approval',
         },
-        { status: 'Reverted' },
+        { status: 'Reverted', revert_reason: 'declined' },
         { returnDocument: 'after' },
       );
 
       if (!transfer) {
         return res.status(404).json({ message: 'Request not found' });
       }
+
+      // Declining does NOT cancel siblings — the request is still live
+      // at the other broadcast facilities and should keep waiting for
+      // one of them to respond.
 
       return res
         .status(200)
@@ -371,7 +477,7 @@ const alertController = {
     }
   },
 
-  // ─── CREATE DRAFT TRANSFER ────────────────────────────
+  // ─── CREATE DRAFT TRANSFER (single facility — kept for back-compat) ──
   // POST /api/alerts/transfer/draft
   createDraftTransfer: async (req, res) => {
     try {
@@ -399,7 +505,71 @@ const alertController = {
     }
   },
 
-  // ─── TRANSMIT TRANSFER ────────────────────────────────
+  // ─── CREATE BROADCAST REQUEST (up to 4 facilities at once) ────────
+  // POST /api/alerts/transfer/broadcast
+  // Body: { providerFacilityIds: [...up to 4], drugId, quantityRequested,
+  //         unit, transactionType, marginLabel }
+  createBroadcastRequest: async (req, res) => {
+    try {
+      const {
+        providerFacilityIds,
+        drugId,
+        quantityRequested,
+        unit,
+        transactionType,
+        marginLabel,
+      } = req.body;
+
+      if (!Array.isArray(providerFacilityIds) || providerFacilityIds.length === 0) {
+        return res.status(400).json({ message: 'Select at least one facility to request from' });
+      }
+      if (providerFacilityIds.length > 4) {
+        return res.status(400).json({ message: 'You can request from at most 4 facilities at once' });
+      }
+
+      const uniqueIds = [...new Set(providerFacilityIds.map(String))];
+      if (uniqueIds.length !== providerFacilityIds.length) {
+        return res.status(400).json({ message: 'Duplicate facilities in request list' });
+      }
+
+      // Requester's own drug (the one running low) — used to sanity-check
+      // the requested quantity against its reorder point.
+      const ownDrug = await Drug.findOne({
+        _id: drugId,
+        facility_id: req.user.facility_id,
+      });
+      if (!ownDrug) {
+        return res.status(404).json({ message: 'Drug not found in your inventory' });
+      }
+
+      const check = validateCustomQuantity(ownDrug, quantityRequested);
+      if (!check.valid) {
+        return res.status(400).json({ message: check.message });
+      }
+
+      const broadcast_id = new mongoose.Types.ObjectId();
+
+      const drafts = await Transfer.insertMany(
+        uniqueIds.map((providerFacilityId) => ({
+          requesterFacility: req.user.facility_id,
+          providerFacility: providerFacilityId,
+          drugId,
+          transactionType,
+          quantityRequested,
+          unit,
+          status: 'Draft',
+          broadcast_id,
+          marginLabel: marginLabel || 'Custom',
+        })),
+      );
+
+      res.status(201).json({ status: 'success', broadcast_id, drafts });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  // ─── TRANSMIT TRANSFER (single facility — kept for back-compat) ───
   // PATCH /api/alerts/transfer/:id/transmit
   transmitTransfer: async (req, res) => {
     try {
@@ -426,6 +596,46 @@ const alertController = {
       });
 
       return res.status(200).json({ status: 'success', transfer: draft });
+    } catch (err) {
+      res.status(500).json({ message: 'Server error', error: err.message });
+    }
+  },
+
+  // ─── TRANSMIT BROADCAST (all drafts sharing a broadcast_id) ───────
+  // PATCH /api/alerts/transfer/broadcast/:broadcastId/transmit
+  transmitBroadcast: async (req, res) => {
+    try {
+      const drafts = await Transfer.find({
+        broadcast_id: req.params.broadcastId,
+        requesterFacility: req.user.facility_id,
+        status: 'Draft',
+      }).populate('drugId', 'drug_name');
+
+      if (!drafts.length) {
+        return res.status(404).json({ message: 'Broadcast request not found' });
+      }
+
+      const revertWindow = new Date();
+      revertWindow.setHours(revertWindow.getHours() + 24);
+
+      await Transfer.updateMany(
+        { broadcast_id: req.params.broadcastId, status: 'Draft' },
+        { status: 'Pending Approval', revertWindowEndsAt: revertWindow },
+      );
+
+      const io = getIO();
+      for (const draft of drafts) {
+        io.to(draft.providerFacility.toString()).emit('new_transfer_request', {
+          message: `New supply request for ${draft.drugId?.drug_name || 'a drug'} (sent to ${drafts.length} facilities — first to accept wins)`,
+          transfer: { ...draft.toObject(), status: 'Pending Approval' },
+        });
+      }
+
+      return res.status(200).json({
+        status: 'success',
+        message: `Request transmitted to ${drafts.length} facilities`,
+        count: drafts.length,
+      });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }
@@ -458,6 +668,7 @@ const alertController = {
       }
 
       transfer.status = 'Reverted';
+      transfer.revert_reason = 'manual';
       await transfer.save();
 
       return res.status(200).json({ status: 'success', transfer });

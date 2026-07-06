@@ -1,4 +1,4 @@
-import User from '../models/user.js';
+import User, { ROLE_LABELS } from '../models/user.js';
 
 // The seeded super admin email — only this account can assign roles
 const SEEDED_ADMIN_EMAIL = process.env.SEEDED_ADMIN_EMAIL || 'okepeter83@gmail.com';
@@ -32,7 +32,7 @@ const adminController = {
       }
 
       const { role } = req.body;
-      const allowed  = ['pharmacist', 'facility_admin', 'super_admin'];
+      const allowed  = Object.keys(ROLE_LABELS);
 
       if (!role || !allowed.includes(role)) {
         return res.status(400).json({ message: `Role must be one of: ${allowed.join(', ')}` });

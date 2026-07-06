@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import Drug from '../models/drug.js';
 import Alert from '../models/alert.js'; 
 import { emitAlert } from '../services/socket.js'; 
+import { getSafeMargins } from '../services/quantityMargins.js';
 
 // ── NEW: Pascal Case Formatter ──
 const toTitleCase = (str) => {
@@ -105,7 +106,7 @@ const inventoryController = {
     try {
       const drug = await Drug.findOne({ _id: req.params.id, facility_id: req.user.facility_id, isActive: true });
       if (!drug) return res.status(404).json({ message: 'Drug not found' });
-      res.status(200).json({ status: 'success', drug });
+      res.status(200).json({ status: 'success', drug, safeMargins: getSafeMargins(drug) });
     } catch (err) {
       res.status(500).json({ message: 'Server error', error: err.message });
     }

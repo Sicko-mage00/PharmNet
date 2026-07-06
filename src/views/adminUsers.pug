@@ -44,6 +44,8 @@ block content
         label New Role
         select.form-control#rm-role
           option(value='pharmacist') Pharmacist
+          option(value='pharmacy_technician') Pharmacy Technician
+          option(value='store_officer') Store / Inventory Officer
           option(value='facility_admin') Facility Admin
           option(value='super_admin') Super Admin
       input(type='hidden' id='rm-user-id')
@@ -186,9 +188,12 @@ block scripts
         }
         tbody.innerHTML = users.map(u => {
           const fullName = toTitle(`${u.firstName} ${u.lastName}`);
-          const roleClass = u.role === 'super_admin'    ? 'badge-ok'
-                          : u.role === 'facility_admin' ? 'badge-facility'
-                          : 'badge-pending';
+          const roleClass = u.role === 'super_admin'         ? 'badge-ok'
+                          : u.role === 'facility_admin'      ? 'badge-facility'
+                          : u.role === 'pharmacist'          ? 'badge-pending'
+                          : u.role === 'pharmacy_technician' ? 'badge-pending'
+                          : u.role === 'store_officer'       ? 'badge-pending'
+                          : 'badge-declined';
           return `
             <tr>
               <td class="name-cell" title="${fullName}">${fullName}</td>
@@ -226,7 +231,7 @@ block scripts
         const result = document.getElementById('role-result');
         const btn    = document.querySelector('#role-modal .btn-primary');
         btn.disabled = true; btn.textContent = 'Saving...';
-        result.innerHTML = `<div class="flash flash-error"...>${data.message}</div>`;
+        result.innerHTML = '';
 
         try {
           const res = await fetch(`/api/admin/users/${id}/role`, {

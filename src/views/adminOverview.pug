@@ -131,10 +131,10 @@ block scripts
         } else {
           fTbody.innerHTML = facilities.slice(0, 5).map(f => `
             <tr>
-              <td class="facility-name-cell">${f.name}</td>
-              <td>${f.type}</td>
-              <td>${f.address ? f.address.city : '—'}</td>
-              <td><span class="badge ${f.isNetworkMember ? 'badge-ok' : 'badge-declined'}">${f.isNetworkMember ? 'Active' : 'Inactive'}</span></td>
+              <td data-label="Name" class="facility-name-cell">${f.name}</td>
+              <td data-label="Type">${f.type}</td>
+              <td data-label="City">${f.address ? f.address.city : '—'}</td>
+              <td data-label="Network"><span class="badge ${f.isNetworkMember ? 'badge-ok' : 'badge-declined'}">${f.isNetworkMember ? 'Active' : 'Inactive'}</span></td>
             </tr>
           `).join('');
         }
@@ -146,10 +146,10 @@ block scripts
         } else {
           kTbody.innerHTML = keys.slice(0, 5).map(k => `
             <tr>
-              <td class="facility-name-cell">${k.facility_id ? k.facility_id.name : '—'}</td>
-              <td><code class="key-code">${k.code}</code></td>
-              <td>${k.role.replace(/_/g,' ')}</td>
-              <td><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
+              <td data-label="Facility" class="facility-name-cell">${k.facility_id ? k.facility_id.name : '—'}</td>
+              <td data-label="Code"><code class="key-code">${k.code}</code></td>
+              <td data-label="Role">${k.role.replace(/_/g,' ')}</td>
+              <td data-label="Status"><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
             </tr>
           `).join('');
         }

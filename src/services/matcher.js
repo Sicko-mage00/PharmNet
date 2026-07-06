@@ -1,5 +1,6 @@
 import Drug from '../models/drug.js';
 import Alert from '../models/alert.js';
+import { TIER_LEVELS } from '../models/facility.js';
 
 // ─── 1. ROP TRIGGER (Creates a Self-Alert) ────────────────────────
 export const matchROP = async (ropData, saleId) => {
@@ -50,7 +51,7 @@ export const getCategorizedMatches = async (requesterFacility, drugName, alertTy
     drug_name: drugName,
     facility_id: { $ne: requesterFacility._id }, 
     isActive: true
-  }).populate('facility_id', 'name state lga tier isNetworkMember isActive');
+  }).populate('facility_id', 'name address type tier tier_rank isNetworkMember isActive');
 
   const validMatches = potentialMatches.filter(d => 
     d.facility_id && 
@@ -62,8 +63,8 @@ export const getCategorizedMatches = async (requesterFacility, drugName, alertTy
   const recommended = [];
   const openNetwork = [];
 
-  const reqTier = requesterFacility.tier;
-  const reqState = requesterFacility.state;
+  const reqTierRank = requesterFacility.tier_rank || 1;
+  const reqState = requesterFacility.address ? requesterFacility.address.state : null;
   
   // Define the 180-day (6 month) FEFO liability threshold
   const now = new Date();
@@ -75,12 +76,17 @@ export const getCategorizedMatches = async (requesterFacility, drugName, alertTy
     let isRecommended = false;
     let isPriority = false;
 
+    // Drugs don't carry a top-level expiry_date — the nearest expiring
+    // batch (already FEFO-sorted by the pre-save hook) is batches[0].
+    const nearestBatch = match.batches && match.batches.length ? match.batches[0] : null;
+    const nearestExpiry = nearestBatch ? new Date(nearestBatch.expiry_date) : null;
+
     // ROP LOGIC: Seeking Surplus or Expiring Drugs
     if (alertType === 'ROP') {
         if (match.total_quantity < (match.reorder_point * 1.2)) continue;
 
         // WASTE VS WANT CHECK
-        if (match.expiry_date && new Date(match.expiry_date) <= sixMonthsFromNow) {
+        if (nearestExpiry && nearestExpiry <= sixMonthsFromNow) {
             isPriority = true;
         }
     }
@@ -90,15 +96,14 @@ export const getCategorizedMatches = async (requesterFacility, drugName, alertTy
         if (match.total_quantity > match.reorder_point) continue; 
     }
 
-    // Tier Matching (Peer-to-Peer & One-Up)
-    const provTier = provFac.tier;
-    let tierMatch = false;
+    // Tier Matching — same tier or HIGHER only, per the actual design:
+    // a facility never gets matched with a lower-tier facility, whether
+    // requesting stock (ROP) or offloading expiring stock upward (FEFO).
+    const provTierRank = provFac.tier_rank || 1;
+    const tierMatch = provTierRank >= reqTierRank;
 
-    if (reqTier === 'Tier 3' && (provTier === 'Tier 3' || provTier === 'Tier 2')) tierMatch = true;
-    if (reqTier === 'Tier 2' && (provTier === 'Tier 2' || provTier === 'Tier 1')) tierMatch = true;
-    if (reqTier === 'Tier 1' && (provTier === 'Tier 1' || provTier === 'Tier 2')) tierMatch = true;
-
-    const stateMatch = (reqState === provFac.state);
+    const provState = provFac.address ? provFac.address.state : null;
+    const stateMatch = reqState && provState && reqState === provState;
 
     if (tierMatch && stateMatch) {
         isRecommended = true;
@@ -108,8 +113,10 @@ export const getCategorizedMatches = async (requesterFacility, drugName, alertTy
         facilityId: provFac._id,
         name: provFac.name,
         tier: provFac.tier,
-        state: provFac.state,
-        lga: provFac.lga,
+        tierRank: provFac.tier_rank,
+        tierLabel: (TIER_LEVELS[provFac.tier] || TIER_LEVELS.tier_1_primary).label,
+        city: provFac.address ? provFac.address.city : null,
+        state: provState,
         statusText: isPriority ? 'Expiring Soon (Discount Available)' : (alertType === 'ROP' ? 'Sufficient Stock' : 'Demand High'),
         transactionType: isPriority ? 'Discounted Offload' : 'Standard Requisition'
     };

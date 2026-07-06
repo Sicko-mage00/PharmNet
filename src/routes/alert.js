@@ -22,9 +22,13 @@ alertRoute.patch('/:id/self-resolve',       alertController.selfResolve);
 alertRoute.patch('/:id/dispatch',           alertController.dispatchAlert);
 alertRoute.patch('/:id/resolve',            alertController.resolveAlert);
 
-// ── TRANSFER FLOW ─────────────────────────────────────
+// ── TRANSFER FLOW (single facility — kept for back-compat) ───
 alertRoute.post('/transfer/draft',          alertController.createDraftTransfer);
 alertRoute.patch('/transfer/:id/transmit',  alertController.transmitTransfer);
 alertRoute.patch('/transfer/:id/revert',    alertController.revertTransfer);
+
+// ── BROADCAST TRANSFER FLOW (up to 4 facilities, first-to-accept wins) ──
+alertRoute.post('/transfer/broadcast',                     alertController.createBroadcastRequest);
+alertRoute.patch('/transfer/broadcast/:broadcastId/transmit', alertController.transmitBroadcast);
 
 export default alertRoute;

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ROLE_LABELS } from './user.js';
 
 const facilityKeySchema = new mongoose.Schema({
     facility_id: {
@@ -20,9 +21,9 @@ const facilityKeySchema = new mongoose.Schema({
     // role this key grants — set by super admin at generation
     role: {
         type: String,
-        enum: ['facility_admin', 'pharmacist'],
+        // super_admin is deliberately excluded — that role is never granted via key
+        enum: Object.keys(ROLE_LABELS).filter((r) => r !== 'super_admin'),
         required: true,
-      // note: super_admin is excluded — that role is never granted via key
     },
 
     // how many times this key can be used

@@ -7,37 +7,80 @@ block content
 
   #fac-flash
 
-  .card#create-card(style='display:none')
+  .card#create-card(style='display:none; border-top: 4px solid var(--primary);')
     .card-title Create New Facility
     form#facility-form
-      .form-row
+      
+      //- SECTION 1: Basic Information
+      .form-section
+        .form-section-header
+          span.form-section-icon
+            svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' width='16' height='16')
+              rect(x='4' y='3' width='16' height='18' rx='1.5')
+              path(d='M12 8v6M9 11h6')
+              path(d='M9 21v-3h6v3')
+          span Facility Details
+        
+        .form-row
+          .form-group
+            label Facility Name
+            input.form-control(type='text' id='f-name' placeholder='e.g. Lagos General Hospital' required)
+          .form-group
+            label Facility Type
+            select.form-control#f-type
+              option(value='clinic') Clinic
+              option(value='general_hospital') General Hospital
+              option(value='teaching_hospital') Teaching Hospital
+              option(value='private_hospital') Private Hospital
+              option(value='pharmacy') Pharmacy
+              option(value='retail_chemist') Retail / Chemist
+              option(value='warehouse') Warehouse / Distributor
+
+        .form-row
+          .form-group
+            label Ownership
+            select.form-control#f-ownership
+              option(value='private') Private
+              option(value='government') Government
+          .form-group
+            label Logistics Tier (Scale/Volume)
+            select.form-control#f-tier
+              option(value='tier_1_primary') Tier 1 — Primary (Clinic/Retail)
+              option(value='tier_2_secondary') Tier 2 — Secondary (General Hosp.)
+              option(value='tier_3_tertiary') Tier 3 — Tertiary (Teaching Hosp.)
+              option(value='tier_4_distribution') Tier 4 — Distribution Hub
+
+        .form-row
+          .form-group
+            label Phone Number
+            input.form-control(type='tel' id='f-phone' placeholder='e.g. 08012345678' required)
+
+      //- SECTION 2: Location
+      .form-section
+        .form-section-header
+          span.form-section-icon
+            svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' width='16' height='16')
+              path(d='M12 21s-7-6.2-7-11.5A7 7 0 0112 2a7 7 0 017 7.5C19 14.8 12 21 12 21z')
+              circle(cx='12' cy='9.5' r='2.3')
+          span Location Information
+        
         .form-group
-          label Facility Name
-          input.form-control(type='text' id='f-name' placeholder='e.g Lagos General Hospital' required)
-        .form-group
-          label Type
-          select.form-control#f-type
-            option(value='hospital') Hospital
-            option(value='pharmacy') Pharmacy
-            option(value='clinic') Clinic
-            option(value='warehouse') Warehouse
-      .form-row
-        .form-group
-          label Phone
-          input.form-control(type='tel' id='f-phone' placeholder='e.g 08012345678' required)
-        .form-group
-          label Street (optional)
-          input.form-control(type='text' id='f-street' placeholder='e.g 12 Marina Road')
-      .form-row
-        .form-group
-          label City
-          input.form-control(type='text' id='f-city' placeholder='e.g Lagos' required)
-        .form-group
-          label State
-          input.form-control(type='text' id='f-state' placeholder='e.g Lagos' required)
-      .form-group
-        button.btn.btn-primary(type='submit') Create Facility
-        button.btn.btn-ghost(type='button' onclick='toggleCreate()' style='margin-left:0.5rem') Cancel
+          label Street Address (Optional)
+          input.form-control(type='text' id='f-street' placeholder='e.g. 12 Marina Road')
+        
+        .form-row
+          .form-group
+            label City
+            input.form-control(type='text' id='f-city' placeholder='e.g. Ikeja' required)
+          .form-group
+            label State
+            input.form-control(type='text' id='f-state' placeholder='e.g. Lagos' required)
+
+      //- ACTION BUTTONS
+      .form-actions
+        button.btn.btn-ghost(type='button' onclick='toggleCreate()') Cancel
+        button.btn.btn-primary(type='submit') + Create Facility
+        
     #facility-result
 
   .card
@@ -46,14 +89,23 @@ block content
       .card-title-actions
         select.form-control#filter-type(style='width:auto;font-size:0.8rem' onchange='applyFilters()')
           option(value='') All Types
-          option(value='hospital') Hospital
-          option(value='pharmacy') Pharmacy
           option(value='clinic') Clinic
+          option(value='general_hospital') General Hospital
+          option(value='teaching_hospital') Teaching Hospital
+          option(value='private_hospital') Private Hospital
+          option(value='pharmacy') Pharmacy
+          option(value='retail_chemist') Retail / Chemist
           option(value='warehouse') Warehouse
         select.form-control#filter-network(style='width:auto;font-size:0.8rem;margin-left:0.5rem' onchange='applyFilters()')
           option(value='') All Status
           option(value='true') Active
           option(value='false') Inactive
+        select.form-control#filter-tier(style='width:auto;font-size:0.8rem;margin-left:0.5rem' onchange='applyFilters()')
+          option(value='') All Tiers
+          option(value='tier_1_primary') Tier 1 — Primary
+          option(value='tier_2_secondary') Tier 2 — Secondary
+          option(value='tier_3_tertiary') Tier 3 — Tertiary
+          option(value='tier_4_distribution') Tier 4 — Distribution
         button.btn.btn-sm.btn-ghost(onclick='loadFacilities()' style='margin-left:0.5rem') ↻
 
     .table-wrapper
@@ -62,13 +114,14 @@ block content
           tr
             th Name
             th Type
+            th Tier
             th City
             th Phone
             th Network
             th Actions
         tbody#facilities-table
           tr
-            td(colspan='6')
+            td(colspan='7')
               .loader
                 .spinner
                 |  Loading...
@@ -82,6 +135,13 @@ block content
       .form-group
         label Facility Name
         input.form-control#edit-name
+      .form-group
+        label Tier
+        select.form-control#edit-tier
+          option(value='tier_1_primary') Tier 1 — Primary
+          option(value='tier_2_secondary') Tier 2 — Secondary
+          option(value='tier_3_tertiary') Tier 3 — Tertiary
+          option(value='tier_4_distribution') Tier 4 — Distribution
       .form-group
         label Phone
         input.form-control#edit-phone
@@ -125,22 +185,32 @@ block scripts
       window.applyFilters = () => {
         const typeF    = document.getElementById('filter-type').value;
         const networkF = document.getElementById('filter-network').value;
+        const tierF    = document.getElementById('filter-tier').value;
         let filtered   = allFacilities;
         if (typeF)    filtered = filtered.filter(f => f.type === typeF);
         if (networkF) filtered = filtered.filter(f => String(f.isNetworkMember) === networkF);
+        if (tierF)    filtered = filtered.filter(f => f.tier === tierF);
         renderFacilities(filtered);
+      };
+
+      const TIER_SHORT = {
+        tier_1_primary: 'Tier 1 · Primary',
+        tier_2_secondary: 'Tier 2 · Secondary',
+        tier_3_tertiary: 'Tier 3 · Tertiary',
+        tier_4_distribution: 'Tier 4 · Distribution',
       };
 
       const renderFacilities = (facilities) => {
         const tbody = document.getElementById('facilities-table');
         if (!facilities.length) {
-          tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><p>No facilities found</p></div></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>No facilities found</p></div></td></tr>';
           return;
         }
         tbody.innerHTML = facilities.map(f => `
           <tr>
             <td data-label="Name"><strong>${f.name}</strong></td>
             <td data-label="Type">${f.type}</td>
+            <td data-label="Tier"><span class="badge badge-facility">${TIER_SHORT[f.tier] || 'Tier 1 · Primary'}</span></td>
             <td data-label="City">${f.address ? f.address.city : '—'}</td>
             <td data-label="Phone">${f.phone}</td>
             <td data-label="Network">
@@ -149,8 +219,8 @@ block scripts
               </span>
             </td>
             <td data-label="Actions" style="white-space:nowrap">
-              <button class="btn btn-sm btn-ghost" onclick="openEdit('${f._id}','${f.name.replace(/'/g,"\\'")}','${f.phone}','${f.address ? f.address.city : ''}','${f.address ? f.address.state : ''}')">Edit</button>
-              <button class="btn btn-sm btn-ghost" onclick="goKeys('${f._id}','${f.name.replace(/'/g,"\\'")}')" style="margin-left:0.3rem">🔑 Key</button>
+              <button class="btn btn-sm btn-ghost" onclick="openEdit('${f._id}','${f.name.replace(/'/g,"\\'")}','${f.phone}','${f.address ? f.address.city : ''}','${f.address ? f.address.state : ''}','${f.tier || 'tier_1_primary'}')">Edit</button>
+              <button class="btn btn-sm btn-ghost" onclick="goKeys('${f._id}','${f.name.replace(/'/g,"\\'")}')" style="margin-left:0.3rem">Key</button>
               <button class="btn btn-sm btn-danger" onclick="deleteFacility('${f._id}','${f.name.replace(/'/g,"\\'")}')" style="margin-left:0.3rem">Delete</button>
             </td>
           </tr>
@@ -161,12 +231,13 @@ block scripts
         window.location.href = `/admin/keys?facility_id=${id}&facility_name=${encodeURIComponent(name)}`;
       };
 
-      window.openEdit = (id, name, phone, city, state) => {
+      window.openEdit = (id, name, phone, city, state, tier) => {
         document.getElementById('edit-id').value    = id;
         document.getElementById('edit-name').value  = name;
         document.getElementById('edit-phone').value = phone;
         document.getElementById('edit-city').value  = city;
         document.getElementById('edit-state').value = state;
+        document.getElementById('edit-tier').value  = tier || 'tier_1_primary';
         document.getElementById('edit-result').innerHTML = '';
         document.getElementById('edit-modal').style.display = 'flex';
       };
@@ -180,6 +251,7 @@ block scripts
           body: JSON.stringify({
             name:    document.getElementById('edit-name').value,
             phone:   document.getElementById('edit-phone').value,
+            tier:    document.getElementById('edit-tier').value,
             address: {
               city:  document.getElementById('edit-city').value,
               state: document.getElementById('edit-state').value,
@@ -240,6 +312,8 @@ block scripts
           body: JSON.stringify({
             name:    document.getElementById('f-name').value,
             type:    document.getElementById('f-type').value,
+            ownership: document.getElementById('f-ownership').value,
+            tier:    document.getElementById('f-tier').value,
             phone:   document.getElementById('f-phone').value,
             address: {
               street: document.getElementById('f-street').value,

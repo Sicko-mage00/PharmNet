@@ -79,6 +79,20 @@ html(lang='en')
                   line(x1='12' y1='22.08' x2='12' y2='12')
                 span Inventory
 
+              a.nav-item(href='/sales')
+                svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
+                  line(x1='12' y1='1' x2='12' y2='23')
+                  path(d='M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6')
+                span Sales
+
+              a.nav-item(href='/marketplace')
+                svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
+                  path(d='M3 3h18l-2 9H5z')
+                  path(d='M5 12L3 3')
+                  circle(cx='9' cy='20' r='1.5')
+                  circle(cx='18' cy='20' r='1.5')
+                span Marketplace
+
               a.nav-item(href='/alerts')
                 svg(viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8')
                   path(d='M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9')
@@ -108,10 +122,12 @@ html(lang='en')
                   line(x1='3' y1='6' x2='21' y2='6')
                   line(x1='3' y1='18' x2='21' y2='18')
               .topbar-brand
-                h1.topbar-title= title || 'PharmaNet'
+                .topbar-brand-wrap
+                  h1.topbar-title= title || 'PharmaNet'
+                  //- The badge will be injected here via JS
+                  span#topbar-tier-container
                 if user && user.role !== 'super_admin'
                   span.topbar-facility-name#topbar-facility-name
-
             .topbar-right
               if user && user.role !== 'super_admin'
                 a.topbar-alert-btn#topbar-alert-btn(href='/alerts')
@@ -119,19 +135,14 @@ html(lang='en')
                     path(d='M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9')
                     path(d='M13.73 21a2 2 0 01-3.46 0')
                   span.topbar-alert-dot#topbar-alert-dot
+                  span.topbar-alert-count#alert-count
 
-              if user && user.role === 'super_admin'
-                .topbar-user
-                  .user-avatar#user-avatar ?
-                  .user-info
-                    span.user-name#user-name Loading...
-                    span.user-role#user-role —
-              else
-                a.topbar-user(href='/profile')
-                  .user-avatar#user-avatar ?
-                  .user-info
-                    span.user-name#user-name Loading...
-                    span.user-role#user-role —
+              //- Unified profile button for ALL users (Admin & Standard)
+              a.topbar-user(href='/profile')
+                .user-avatar#user-avatar ?
+                .user-info
+                  span.user-name#user-name Loading...
+                  span.user-role#user-role —
 
           main.page-content
             block content

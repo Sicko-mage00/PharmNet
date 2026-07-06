@@ -1,6 +1,18 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+// ─── ROLE CATALOG ─────────────────────────────────────────
+// Single source of truth for role keys + display labels, so the
+// admin UI, facility-key issuance, and role-change validation all
+// read from the same list instead of duplicating string arrays.
+export const ROLE_LABELS = {
+    super_admin:         'Super Admin',
+    facility_admin:      'Facility Admin',
+    pharmacist:          'Pharmacist',
+    pharmacy_technician: 'Pharmacy Technician',
+    store_officer:       'Store / Inventory Officer',
+};
+
 const userSchema = new mongoose.Schema({
     firstName: { type: String, trim: true },
     lastName:  { type: String, trim: true },
@@ -17,7 +29,7 @@ const userSchema = new mongoose.Schema({
 
     role: {
         type: String,
-        enum: ['super_admin', 'facility_admin', 'pharmacist', null],
+        enum: [...Object.keys(ROLE_LABELS), null],
         default: null,
     },
 

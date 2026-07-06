@@ -432,6 +432,14 @@ td,
   background: #e0f2fe;
   color: #0369a1;
 }
+.badge-warning {
+  background: #fef3e0;
+  color: #b7791f;
+}
+.badge-success {
+  background: #e6f9f0;
+  color: #1a9e5c;
+}
 
 /* ── BATCH INVENTORY ACCORDIONS ── */
 .batch-accordion {
@@ -648,10 +656,14 @@ td,
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
+  flex: 1;
 }
 .topbar-brand {
   display: flex;
   flex-direction: column;
+  min-width: 0; 
+  width: 100%;
 }
 .topbar-title {
   font-size: 1rem;
@@ -665,6 +677,11 @@ td,
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.4px;
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .topbar-alert-btn {
   position: relative;
@@ -699,6 +716,26 @@ td,
   display: none;
 }
 .topbar-alert-dot.visible {
+  display: block;
+}
+.topbar-alert-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--danger, #e53e3e);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 999px;
+  border: 2px solid white;
+  display: none;
+}
+.topbar-alert-count.visible {
   display: block;
 }
 @keyframes alertPulse {
@@ -800,7 +837,38 @@ td,
   font-weight: 700;
   color: var(--text);
 }
-
+.form-section {
+  background: #fafbfc;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+.form-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--border);
+  font-weight: 700;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+.form-section-icon {
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  color: var(--primary);
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.5rem;
+}
 /* ─── 4. DASHBOARD (CARDS, STATS, TABLES, SCANNER) ──────── */
 .card {
   background: var(--card-bg);
@@ -1608,6 +1676,26 @@ COMPACT TABLE (DASHBOARD RECENT SALES & MOBILE OVERRIDES)
   background: #dcfce7;
   color: #166534;
 }
+.wa-badge-status.badge-confirmed {
+  background: #cce5ff;
+  color: #004085;
+}
+.wa-badge-status.badge-dispatched {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+.wa-badge-status.badge-declined {
+  background: #fee8e8;
+  color: #d63031;
+}
+.wa-badge-status.badge-expired {
+  background: #e9ecef;
+  color: #495057;
+}
+.wa-badge-status.badge-cancelled {
+  background: #e2e8f0;
+  color: #475569;
+}
 
 .wa-bubble-body {
   color: var(--text);
@@ -1657,6 +1745,161 @@ COMPACT TABLE (DASHBOARD RECENT SALES & MOBILE OVERRIDES)
 }
 .wa-bubble-time {
   font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* OPay-Style Tier Badge */
+.topbar-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.opay-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: linear-gradient(135deg, #FFD700 0%, #F5A623 100%); 
+  color: #5d4000;
+  font-size: 0.55rem;    /* Reduced from 0.65rem */
+  font-weight: 800;
+  padding: 0.1rem 0.4rem; /* Reduced padding */
+  border-radius: 8px;     /* Slightly tighter border radius */
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  box-shadow: 0 2px 4px rgba(245, 166, 35, 0.3);
+  flex-shrink: 0;         /* Prevents the badge itself from getting squished */
+}
+.opay-tier-badge svg {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+/* ── NETWORK FACILITY PICKER (used in the request/broadcast modal) ── */
+.network-match-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+  background: var(--card-bg);
+  transition: border-color 0.15s, background 0.15s;
+}
+.network-match-card:hover {
+  border-color: var(--primary);
+  background: var(--page-bg);
+}
+.priority-match-card {
+  border-color: #f0b775;
+  background: #fffaf3;
+}
+.network-match-checkbox {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.network-match-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.network-match-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.network-match-info strong {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.network-match-info span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.network-match-status {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* ── SAFE MARGIN QUANTITY PRESETS ── */
+.margin-preset-btn {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.7rem;
+}
+
+/* ── INVITE CODE DISPLAY (scales down on narrow screens instead of overflowing) ── */
+.invite-code-display {
+  font-size: clamp(1.15rem, 6vw, 2rem);
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
+  color: var(--primary);
+  letter-spacing: clamp(1px, 0.8vw, 4px);
+  word-break: break-all;
+}
+
+/* ── FEFO NETWORK MARKETPLACE ── */
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.market-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.market-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+.market-card.market-urgent {
+  border-left: 3px solid var(--danger, #e53e3e);
+}
+.market-card.market-soon {
+  border-left: 3px solid var(--warning, #dd6b20);
+}
+.market-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.market-card-header strong {
+  font-size: 0.95rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-card-facility {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.6rem;
+}
+.market-progress {
+  height: 6px;
+  background: var(--page-bg);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+.market-progress-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+}
+.market-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
 
@@ -1784,9 +2027,6 @@ COMPACT TABLE (DASHBOARD RECENT SALES & MOBILE OVERRIDES)
     height: 32px;
     font-size: 0.75rem;
   }
-  .topbar-facility-name {
-    display: none;
-  }
   .page-content {
     padding: 0.85rem;
     width: 100%;
@@ -1891,6 +2131,10 @@ COMPACT TABLE (DASHBOARD RECENT SALES & MOBILE OVERRIDES)
     flex-wrap: wrap;
     gap: 0.75rem;
   }
+  .card-title {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
   .page-header .btn {
     width: 100%;
     justify-content: center;
@@ -1994,5 +2238,32 @@ COMPACT TABLE (DASHBOARD RECENT SALES & MOBILE OVERRIDES)
     text-align: left;
     margin-top: 4px;
     margin-left: 26px;
+  }
+  .modal-footer {
+    flex-direction: column-reverse;
+  }
+  .modal-footer .btn {
+    width: 100% !important;
+  }
+  .margin-preset-btn {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.55rem;
+  }
+  .wa-tab {
+    font-size: 0.78rem;
+    padding: 0.7rem 0;
+  }
+  .market-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-section {
+    padding: 1rem;
+  }
+  .form-actions {
+    flex-direction: column-reverse; /* Puts the primary button on top on mobile */
+  }
+  .form-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 }

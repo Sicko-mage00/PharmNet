@@ -19,6 +19,13 @@ block content
             option(value='clinic') Clinic
             option(value='warehouse') Warehouse
         .form-group
+          label Tier
+          select.form-control#f-tier
+            option(value='tier_1_primary') Tier 1 — Primary
+            option(value='tier_2_secondary') Tier 2 — Secondary
+            option(value='tier_3_tertiary') Tier 3 — Tertiary
+            option(value='tier_4_distribution') Tier 4 — Distribution
+        .form-group
           label Phone
           input.form-control(type='tel' id='f-phone' placeholder='e.g 08012345678' required)
         .form-group
@@ -45,6 +52,8 @@ block content
           label Role to Grant
           select.form-control#k-role(required)
             option(value='pharmacist') Pharmacist
+            option(value='pharmacy_technician') Pharmacy Technician
+            option(value='store_officer') Store / Inventory Officer
             option(value='facility_admin') Facility Admin
         .form-row
           .form-group
@@ -115,15 +124,12 @@ block scripts
           } else {
             tbody.innerHTML = facilities.map(f => `
               <tr>
-                <td><strong>${f.name}</strong></td>
-                <td>${f.type}</td>
-                <td>${f.address ? f.address.city : '—'}</td>
-                <td>${f.phone}</td>
-                <td>
-                  <button class="btn btn-sm btn-primary"
-                    onclick="prefillKeyForm('${f._id}', '${f.name}')">
-                    Generate Key
-                  </button>
+                <td data-label="Name"><strong>${f.name}</strong></td>
+                <td data-label="Type">${f.type}</td>
+                <td data-label="City">${f.address ? f.address.city : '—'}</td>
+                <td data-label="Phone">${f.phone}</td>
+                <td data-label="Action">
+                  <button class="btn btn-sm btn-primary" onclick="prefillKeyForm('${f._id}', '${f.name}')">Generate Key</button>
                 </td>
               </tr>
             `).join('');
@@ -158,12 +164,12 @@ block scripts
 
           tbody.innerHTML = keys.map(k => `
             <tr>
-              <td>${k.facility_id ? k.facility_id.name : '—'}</td>
-              <td><code style="background:#f0f2f5;padding:0.2rem 0.5rem;border-radius:4px;font-family:'DM Mono',monospace;font-weight:600">${k.code}</code></td>
-              <td>${k.role}</td>
-              <td>${k.usedCount} / ${k.maxUses}</td>
-              <td>${new Date(k.expiresAt).toLocaleDateString()}</td>
-              <td><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
+              <td data-label="Facility">${k.facility_id ? k.facility_id.name : '—'}</td>
+              <td data-label="Code"><code style="background:#f0f2f5;padding:0.2rem 0.5rem;border-radius:4px;font-family:'DM Mono',monospace;font-weight:600">${k.code}</code></td>
+              <td data-label="Role">${k.role}</td>
+              <td data-label="Uses">${k.usedCount} / ${k.maxUses}</td>
+              <td data-label="Expires">${new Date(k.expiresAt).toLocaleDateString()}</td>
+              <td data-label="Status"><span class="badge ${k.isActive ? 'badge-ok' : 'badge-expired'}">${k.isActive ? 'Active' : 'Inactive'}</span></td>
             </tr>
           `).join('');
         });
@@ -192,6 +198,7 @@ block scripts
             body: JSON.stringify({
               name:  document.getElementById('f-name').value,
               type:  document.getElementById('f-type').value,
+              tier:  document.getElementById('f-tier').value, // <-- ADD THIS LINE
               phone: document.getElementById('f-phone').value,
               address: {
                 street: document.getElementById('f-street').value,

@@ -10,7 +10,9 @@ router.get('/verify',    (req, res) => res.render('verify',   { title: 'Verify F
 // ─── Super admin pages ────────────────────────────────
 router.get('/admin',              (req, res) => res.render('adminOverview',   { title: 'Overview',   user: { role: 'super_admin' } }));
 router.get('/admin/facilities',   (req, res) => res.render('adminFacilities', { title: 'Facilities', user: { role: 'super_admin' } }));
-router.get('/admin/keys',         (req, res) => res.render('adminKeys',       { title: 'Keys',       user: { role: 'super_admin' } }));
+// NOTE: template file is adminSetup.pug (invite-key generation), not adminKeys —
+// the original render('adminKeys', ...) call would 500 on every visit.
+router.get('/admin/keys',         (req, res) => res.render('adminSetup',      { title: 'Keys',       user: { role: 'super_admin' } }));
 router.get('/admin/users',        (req, res) => res.render('adminUsers',      { title: 'Users',      user: { role: 'super_admin' } }));
 
 // ─── Pharmacist / facility admin pages ───────────────
@@ -22,6 +24,7 @@ router.get('/sales',          (req, res) => res.render('sales',           { titl
 router.get('/sales/new',      (req, res) => res.render('salesNew',        { title: 'Record Sale', user: true }));
 router.get('/scan',           (req, res) => res.render('scan',            { title: 'Scan Drug',   user: true }));
 router.get('/alerts',         (req, res) => res.render('alerts',          { title: 'Alerts',      user: true }));
+router.get('/marketplace',    (req, res) => res.render('marketplace',     { title: 'Marketplace', user: true }));
 router.get('/profile',        (req, res) => res.render('profile',         { title: 'Profile',     user: true }));
 
 export default router;

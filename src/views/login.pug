@@ -94,10 +94,11 @@ block scripts
               window.location.href = '/dashboard';
             }
           } else {
-            // FAILURE: Display the specific error from the backend (e.g., "Invalid password")
+            // FAILURE: Display the specific error from the backend
             submitBtn.textContent = 'Login';
             submitBtn.disabled = false;
-            resultDiv.innerHTML = `<div class="flash-error">${data.message || 'Invalid email or password.'}</div>`;
+            // UPDATE THIS LINE BELOW:
+            resultDiv.innerHTML = `<div class="flash-error">${data.message || 'invalid login.'}</div>`;
           }
         } catch (err) {
           // FATAL ERROR: Network crash

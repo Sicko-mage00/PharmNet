@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Auth guard — fetch fresh profile from server ──
   // This is the single source of truth; we do NOT trust localStorage for role checks
   const adminPaths    = ['/admin'];
-  const protectedPaths = ['/dashboard','/inventory','/sales','/alerts','/profile','/verify','/scan'];
+  const protectedPaths = ['/dashboard','/inventory','/sales','/alerts','/marketplace','/profile','/verify','/scan'];
   const isAdminPath    = adminPaths.some(p => currentPath.startsWith(p));
   const isProtected    = protectedPaths.some(p => currentPath.startsWith(p));
 
@@ -124,6 +124,18 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         avatarEl.textContent = (user.name || 'U')[0].toUpperCase();
       }
+    }
+
+    // Inject the OPay-style Tier Badge
+    const tierContainer = document.getElementById('topbar-tier-container');
+    if (tierContainer && user.role !== 'super_admin') {
+      // Assuming tier is saved in localStorage. Fallback to Tier 1 if missing.
+      const userTier = user.tier ? user.tier.split('_')[1] : '1'; 
+      tierContainer.innerHTML = `
+        <span class="opay-tier-badge">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          Tier ${userTier}
+        </span>`;
     }
   }
 
@@ -196,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(r => { if (!r.ok) return null; return r.json(); })
         .then(data => {
           if (!data) return;
-          const pending = (data.alerts || []).filter(a => a.status === 'pending');
+          const pending = (data.alerts || []).filter(a => !a.resolved);
           const count   = pending.length;
 
           const badge = document.getElementById('alert-count');
@@ -247,10 +259,31 @@ document.addEventListener('DOMContentLoaded', () => {
           if (currentPath === '/alerts') setTimeout(() => window.location.reload(), 800);
         });
 
-        socket.on('alert_cancelled', () => {
+        // ── Network transfer events (broadcast requests — workstream B/C) ──
+        const notifyAndRefresh = (title, message) => {
+          if (Notification.permission === 'granted') {
+            new Notification(title, { body: message, icon: '/favicon.ico' });
+          }
+          document.getElementById('topbar-alert-btn')?.classList.add('has-alerts');
+          document.getElementById('topbar-alert-dot')?.classList.add('visible', 'pulse');
           checkAlerts();
           if (currentPath === '/alerts') setTimeout(() => window.location.reload(), 800);
-        });
+        };
+
+        // A facility just received a new incoming supply request (possibly
+        // one of up to 4 sent out as a broadcast).
+        socket.on('new_transfer_request', (data) => notifyAndRefresh('PharmaNet — New Request', data.message));
+
+        // The requester's broadcast was accepted by one facility.
+        socket.on('transfer_accepted', (data) => notifyAndRefresh('PharmaNet — Request Accepted', data.message));
+
+        // This facility's copy of a broadcast request was auto-cancelled
+        // because another facility accepted first.
+        socket.on('transfer_auto_cancelled', (data) => notifyAndRefresh('PharmaNet — Request Fulfilled Elsewhere', data.message));
+
+        // A request (Alert or Transfer) timed out with no response.
+        socket.on('alert_expired', (data) => notifyAndRefresh('PharmaNet — No Response', data.message));
+        socket.on('transfer_expired', (data) => notifyAndRefresh('PharmaNet — Request Expired', data.message));
 
         socket.on('drugs_dispatched', (data) => {
           if (Notification.permission === 'granted') {

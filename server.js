@@ -15,9 +15,11 @@ import facilityKeyRoute from './src/routes/facilityKey.js';
 import inventoryRoute from './src/routes/inventory.js';
 import saleRoute from './src/routes/sale.js';
 import alertRoute from './src/routes/alert.js';
+import marketplaceRoute from './src/routes/marketplace.js';
 import viewRoute from './src/routes/view.js';
 import adminRoute from './src/routes/admin.js';
 import { checkExpiredAlerts } from './src/services/alertExpiry.js';
+import { processMarketplaceQueue } from './src/services/marketplaceQueue.js';
 
 // ─── IMPORT OUR NEW CRON JOB ───
 import { initCronJobs } from './src/cron.js';
@@ -63,6 +65,7 @@ app.use('/api/facility-keys', facilityKeyRoute);
 app.use('/api/inventory', inventoryRoute);
 app.use('/api/sales', saleRoute);
 app.use('/api/alerts', alertRoute);
+app.use('/api/marketplace', marketplaceRoute);
 app.use('/api/admin', adminRoute);
 
 httpServer.listen(process.env.PORT || 3000, () => {
@@ -71,6 +74,7 @@ httpServer.listen(process.env.PORT || 3000, () => {
 
 // ─── Background jobs ──────────────────────────────────
 setInterval(checkExpiredAlerts, 30 * 60 * 1000);
+setInterval(processMarketplaceQueue, 2 * 60 * 1000); // every 2 min — order deadlines are much tighter than alert expiry
 
 // ─── INITIALIZE NIGHTLY FEFO SCANNER ───
 initCronJobs();

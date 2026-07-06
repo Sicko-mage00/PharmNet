@@ -7,7 +7,7 @@ const facilityController = {
   // super_admin only
   createFacility: async (req, res) => {
     try {
-        const { name, address, phone, type } = req.body;
+        const { name, address, phone, type, tier, ownership } = req.body;
 
         if (!name || !address || !phone) {
             return res.status(400).json({ message: 'name, address and phone are required' });
@@ -18,6 +18,8 @@ const facilityController = {
             address,
             phone,
             type,
+            tier,
+            ownership,
         });
 
         res.status(201).json({
@@ -40,8 +42,8 @@ const facilityController = {
   getAllFacilities: async (req, res) => {
     try {
       const facilities = await Facility.find({ isActive: true })
-        .select('name phone address type isNetworkMember')
-        .sort({ name: 1 });
+        .select('name phone address type tier tier_rank isNetworkMember')
+        .sort({ tier_rank: -1, name: 1 });
 
       res.status(200).json({
         status: 'success',
@@ -79,11 +81,11 @@ const facilityController = {
   // super_admin only
   updateFacility: async (req, res) => {
     try {
-        const { name, phone, address, type } = req.body;
+        const { name, phone, address, type, tier, ownership } = req.body;
 
         const facility = await Facility.findByIdAndUpdate(
             req.params.id,
-            { name, phone, address, type },
+            { name, phone, address, type, tier, ownership },
             { returnDocument: 'after', runValidators: true }
         );
 

@@ -1,0 +1,302 @@
+extends layout
+
+block content
+  .page-header
+    div
+      h2 Network Marketplace
+      p.page-subtitle Expiring and surplus stock listed by facilities across the network — buy in units, first come first served.
+    .card-title-actions(style='display:flex; gap:0.5rem;')
+      input.form-control#search-drug(type='text' placeholder='Search drug name...' onkeyup='applyMarketFilters()' style='width:200px;')
+      select.form-control#sort-listings(onchange='applyMarketFilters()' style='width:auto;')
+        option(value='expiry') Soonest Expiring
+        option(value='price') Lowest Price
+        option(value='tier') Highest Tier Seller
+
+  .wa-tabs(style='margin-bottom:1rem; border-radius: var(--radius-sm); border: 1px solid var(--border); overflow:hidden;')
+    button.wa-tab.active#market-tab-browse(onclick='switchMarketTab("browse")') Browse Network
+    button.wa-tab#market-tab-orders(onclick='switchMarketTab("orders")') My Orders
+    button.wa-tab#market-tab-mine(onclick='switchMarketTab("mine")') My Listings
+
+  #market-browse-panel
+    #market-grid.market-grid
+      .loader
+        .spinner
+        | Loading marketplace...
+
+  #market-orders-panel(style='display:none')
+    #market-orders-list
+      .loader
+        .spinner
+        | Loading your orders...
+
+  #market-mine-panel(style='display:none')
+    .card-title-actions(style='margin-bottom:1rem;')
+      button.btn.btn-primary(onclick='openListDrugModal()') + List a Drug
+    #market-mine-list
+      .loader
+        .spinner
+        | Loading your listings...
+
+block scripts
+  script.
+    let marketListings = [];
+    let myListings = [];
+    let activeMarketTab = 'browse';
+
+    window.switchMarketTab = (tab) => {
+      activeMarketTab = tab;
+      document.getElementById('market-tab-browse').classList.toggle('active', tab === 'browse');
+      document.getElementById('market-tab-orders').classList.toggle('active', tab === 'orders');
+      document.getElementById('market-tab-mine').classList.toggle('active', tab === 'mine');
+      document.getElementById('market-browse-panel').style.display = tab === 'browse' ? 'block' : 'none';
+      document.getElementById('market-orders-panel').style.display = tab === 'orders' ? 'block' : 'none';
+      document.getElementById('market-mine-panel').style.display = tab === 'mine' ? 'block' : 'none';
+      if (tab === 'mine') loadMyListings();
+      if (tab === 'orders') loadMyOrders();
+    };
+
+    const daysUntil = (dateStr) => Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
+
+    const loadListings = async () => {
+      try {
+        const r = await fetch('/api/marketplace', { credentials: 'include' });
+        const data = await r.json();
+        marketListings = data.listings || [];
+        renderListings(marketListings);
+      } catch (err) {
+        document.getElementById('market-grid').innerHTML = '\x3cdiv class="flash flash-error"\x3eFailed to load marketplace\x3c/div\x3e';
+      }
+    };
+
+    window.applyMarketFilters = () => {
+      const q = document.getElementById('search-drug').value.toLowerCase();
+      const sort = document.getElementById('sort-listings').value;
+      let filtered = marketListings.filter(l => !q || l.drug_name.toLowerCase().includes(q));
+      filtered.sort((a, b) => {
+        if (sort === 'price') return (a.unit_price || 0) - (b.unit_price || 0);
+        if (sort === 'tier') return (b.facility_id?.tier_rank || 0) - (a.facility_id?.tier_rank || 0);
+        return new Date(a.expiry_date) - new Date(b.expiry_date);
+      });
+      renderListings(filtered);
+    };
+
+    const renderListings = (listings) => {
+      const grid = document.getElementById('market-grid');
+      if (!listings.length) {
+        grid.innerHTML = '\x3cdiv class="empty-state"\x3e\x3cp\x3eNo listings match right now \u2014 check back soon.\x3c/p\x3e\x3c/div\x3e';
+        return;
+      }
+      grid.innerHTML = listings.map(l => {
+        const days = daysUntil(l.expiry_date);
+        const urgencyClass = days <= 30 ? 'market-urgent' : days <= 90 ? 'market-soon' : '';
+        const pct = Math.round((l.quantity_remaining / l.quantity_listed) * 100);
+        const queueNote = l.available_to_order < l.quantity_remaining
+          ? '\x3cspan class="market-queue-note"\x3e' + (l.quantity_remaining - l.available_to_order) + ' held by pending orders' + (l.queue_length ? ' \u00b7 ' + l.queue_length + ' queued' : '') + '\x3c/span\x3e'
+          : '';
+        return '\x3cdiv class="market-card ' + urgencyClass + '"\x3e' +
+          '\x3cdiv class="market-card-header"\x3e' +
+            '\x3cstrong\x3e' + l.drug_name + '\x3c/strong\x3e' +
+            '\x3cspan class="badge ' + (days <= 30 ? 'badge-declined' : days <= 90 ? 'badge-fefo' : 'badge-ok') + '"\x3e' + (days <= 0 ? 'Expired' : days + 'd left') + '\x3c/span\x3e' +
+          '\x3c/div\x3e' +
+          '\x3cdiv class="market-card-facility"\x3e' + (l.facility_id ? l.facility_id.name : 'Unknown facility') + (l.facility_id && l.facility_id.address ? ' \u00b7 ' + l.facility_id.address.city : '') + '\x3c/div\x3e' +
+          (l.seller_phone ? '\x3cdiv class="market-card-facility"\x3eCall: ' + l.seller_phone + '\x3c/div\x3e' : '') +
+          '\x3cdiv class="market-progress"\x3e\x3cdiv class="market-progress-fill" style="width:' + pct + '%"\x3e\x3c/div\x3e\x3c/div\x3e' +
+          '\x3cdiv class="market-card-meta"\x3e' +
+            '\x3cspan\x3e' + l.available_to_order + ' / ' + l.quantity_listed + ' ' + l.unit + '(s) available\x3c/span\x3e' +
+            (l.unit_price ? '\x3cspan\x3e\u20a6' + l.unit_price + '/unit\x3c/span\x3e' : '\x3cspan\x3eFree offload\x3c/span\x3e') +
+          '\x3c/div\x3e' + queueNote +
+          '\x3cbutton class="btn btn-sm btn-primary" style="width:100%; margin-top:0.5rem;" onclick="openBuyModal(\'' + l._id + '\', \'' + l.drug_name.replace(/'/g, "\\'") + '\', ' + l.quantity_remaining + ', \'' + l.unit + '\', ' + (l.available_to_order < l.quantity_remaining) + ')"\x3ePlace Order\x3c/button\x3e' +
+        '\x3c/div\x3e';
+      }).join('');
+    };
+
+    window.openBuyModal = (listingId, drugName, maxQty, unit, mayQueue) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = '\x3cdiv class="modal-box"\x3e' +
+        '\x3cdiv class="modal-header"\x3e\x3ch3\x3eOrder ' + drugName + '\x3c/h3\x3e\x3cbutton class="modal-close" onclick="this.closest(\'.modal-backdrop\').remove()"\x3e\u2715\x3c/button\x3e\x3c/div\x3e' +
+        '\x3cp style="font-size:0.85rem; color:#8492a6;"\x3eThis places a reservation, not an instant purchase \u2014 you\u2019ll need to confirm once payment is arranged outside the app, within the confirmation window, or your order is released to the next facility in line.\x3c/p\x3e' +
+        (mayQueue ? '\x3cdiv class="flash flash-error" style="margin-bottom:0.5rem;"\x3eSome of this stock is already held by another pending order \u2014 your order may be queued.\x3c/div\x3e' : '') +
+        '\x3cdiv class="form-group"\x3e\x3clabel\x3eQuantity (max ' + maxQty + ' ' + unit + '(s))\x3c/label\x3e\x3cinput type="number" class="form-control" id="buy-qty" min="1" max="' + maxQty + '" value="1" /\x3e\x3c/div\x3e' +
+        '\x3cdiv id="buy-result"\x3e\x3c/div\x3e' +
+        '\x3cdiv class="modal-footer"\x3e\x3cbutton class="btn btn-ghost" onclick="this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e\x3cbutton class="btn btn-success" onclick="submitPurchase(\'' + listingId + '\', this)"\x3ePlace Order\x3c/button\x3e\x3c/div\x3e' +
+      '\x3c/div\x3e';
+      document.body.appendChild(modal);
+    };
+
+    window.submitPurchase = async (listingId, btn) => {
+      const qty = Number(document.getElementById('buy-qty').value);
+      const resultDiv = document.getElementById('buy-result');
+      if (!qty || qty <= 0) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3eEnter a valid quantity\x3c/div\x3e';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Placing order...';
+      try {
+        const res = await fetch('/api/marketplace/' + listingId + '/order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ quantity: qty }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-success"\x3e' + data.message + '\x3c/div\x3e';
+        setTimeout(() => { document.querySelector('.modal-backdrop')?.remove(); loadListings(); }, 1800);
+      } catch (err) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3e' + err.message + '\x3c/div\x3e';
+        btn.disabled = false;
+        btn.textContent = 'Place Order';
+      }
+    };
+
+    // ── MY ORDERS (buyer's cart / order history) ──
+    const loadMyOrders = async () => {
+      try {
+        const r = await fetch('/api/marketplace/orders/mine', { credentials: 'include' });
+        const data = await r.json();
+        const orders = data.orders || [];
+        const el = document.getElementById('market-orders-list');
+        if (!orders.length) {
+          el.innerHTML = '\x3cdiv class="empty-state"\x3e\x3cp\x3eYou haven\u2019t placed any marketplace orders yet.\x3c/p\x3e\x3c/div\x3e';
+          return;
+        }
+        const statusBadge = {
+          queued: 'badge-pending', awaiting_confirmation: 'badge-pending', confirmed: 'badge-confirmed',
+          completed: 'badge-resolved', expired: 'badge-expired', cancelled: 'badge-declined',
+        };
+        el.innerHTML = orders.map(o => {
+          let actionHtml = '';
+          if (o.status === 'awaiting_confirmation') {
+            actionHtml = '\x3cbutton class="btn btn-sm btn-success" onclick="confirmMyOrder(\'' + o.order_id + '\')"\x3eConfirm Payment Arranged\x3c/button\x3e' +
+                         '\x3cbutton class="btn btn-sm btn-ghost" onclick="cancelMyOrder(\'' + o.order_id + '\')"\x3eCancel\x3c/button\x3e' +
+                         '\x3cdiv class="market-deadline"\x3eConfirm by: ' + new Date(o.confirm_by).toLocaleString() + '\x3c/div\x3e';
+          } else if (o.status === 'confirmed') {
+            actionHtml = '\x3cbutton class="btn btn-sm btn-ghost" onclick="cancelMyOrder(\'' + o.order_id + '\')"\x3eRevert\x3c/button\x3e' +
+                         '\x3cdiv class="market-deadline"\x3eFinalizes: ' + new Date(o.revert_by).toLocaleString() + '\x3c/div\x3e';
+          } else if (o.status === 'queued') {
+            actionHtml = '\x3cbutton class="btn btn-sm btn-ghost" onclick="cancelMyOrder(\'' + o.order_id + '\')"\x3eCancel\x3c/button\x3e' +
+                         '\x3cdiv class="market-deadline"\x3eWaiting for capacity to free up\x3c/div\x3e';
+          }
+          return '\x3cdiv class="market-card"\x3e' +
+            '\x3cdiv class="market-card-header"\x3e\x3cstrong\x3e' + o.drug_name + '\x3c/strong\x3e\x3cspan class="badge ' + (statusBadge[o.status] || 'badge-pending') + '"\x3e' + o.status.replace('_', ' ') + '\x3c/span\x3e\x3c/div\x3e' +
+            '\x3cdiv class="market-card-facility"\x3eFrom ' + o.seller + '\x3c/div\x3e' +
+            '\x3cdiv class="market-card-meta"\x3e\x3cspan\x3e' + o.quantity + ' ' + o.unit + '(s)\x3c/span\x3e\x3c/div\x3e' +
+            actionHtml +
+          '\x3c/div\x3e';
+        }).join('');
+      } catch (err) {
+        document.getElementById('market-orders-list').innerHTML = '\x3cdiv class="flash flash-error"\x3eFailed to load your orders\x3c/div\x3e';
+      }
+    };
+
+    window.confirmMyOrder = async (orderId) => {
+      await fetch('/api/marketplace/orders/' + orderId + '/confirm', { method: 'PATCH', credentials: 'include' });
+      loadMyOrders();
+    };
+
+    window.cancelMyOrder = async (orderId) => {
+      await fetch('/api/marketplace/orders/' + orderId + '/cancel', { method: 'PATCH', credentials: 'include' });
+      loadMyOrders();
+    };
+
+    // ── MY LISTINGS ──
+    const loadMyListings = async () => {
+      try {
+        const r = await fetch('/api/marketplace/mine', { credentials: 'include' });
+        const data = await r.json();
+        myListings = data.listings || [];
+        renderMyListings();
+      } catch (err) {
+        document.getElementById('market-mine-list').innerHTML = '\x3cdiv class="flash flash-error"\x3eFailed to load your listings\x3c/div\x3e';
+      }
+    };
+
+    const renderMyListings = () => {
+      const el = document.getElementById('market-mine-list');
+      if (!myListings.length) {
+        el.innerHTML = '\x3cdiv class="empty-state"\x3e\x3cp\x3eYou have no listings yet.\x3c/p\x3e\x3c/div\x3e';
+        return;
+      }
+      el.innerHTML = myListings.map(l => {
+        const statusBadge = l.status === 'active' ? 'badge-ok' : l.status === 'sold_out' ? 'badge-facility' : 'badge-expired';
+        const liveOrders = (l.orders || []).filter(o => ['queued', 'awaiting_confirmation', 'confirmed'].includes(o.status));
+        const orderRows = liveOrders.map(o => {
+          const buyerName = o.facility_id ? o.facility_id.name : 'Unknown facility';
+          const buyerPhone = o.facility_id && o.facility_id.phone ? ' \u00b7 Call: ' + o.facility_id.phone : '';
+          const statusText = o.status === 'queued' ? 'Queued' : o.status === 'awaiting_confirmation' ? 'Awaiting buyer confirmation' : 'Confirmed \u2014 in revert window';
+          return '\x3cdiv class="market-order-row"\x3e' +
+            '\x3cspan\x3e' + buyerName + buyerPhone + ' \u2014 ' + o.quantity + ' ' + l.unit + '(s)\x3c/span\x3e' +
+            '\x3cspan class="badge badge-pending"\x3e' + statusText + '\x3c/span\x3e' +
+            '\x3cbutton class="btn btn-sm btn-ghost" onclick="cancelMyOrder(\'' + o._id + '\')"\x3eCancel\x3c/button\x3e' +
+          '\x3c/div\x3e';
+        }).join('');
+        return '\x3cdiv class="market-card"\x3e' +
+          '\x3cdiv class="market-card-header"\x3e\x3cstrong\x3e' + l.drug_name + '\x3c/strong\x3e\x3cspan class="badge ' + statusBadge + '"\x3e' + l.status.replace('_', ' ') + '\x3c/span\x3e\x3c/div\x3e' +
+          '\x3cdiv class="market-card-meta"\x3e\x3cspan\x3e' + l.quantity_remaining + ' / ' + l.quantity_listed + ' ' + l.unit + '(s) left\x3c/span\x3e\x3c/div\x3e' +
+          orderRows +
+          (l.status === 'active' ? '\x3cbutton class="btn btn-sm btn-ghost" style="width:100%; margin-top:0.5rem;" onclick="withdrawListing(\'' + l._id + '\')"\x3eWithdraw\x3c/button\x3e' : '') +
+        '\x3c/div\x3e';
+      }).join('');
+    };
+
+    window.withdrawListing = async (id) => {
+      await fetch('/api/marketplace/' + id + '/withdraw', { method: 'PATCH', credentials: 'include' });
+      loadMyListings();
+    };
+
+    // ── LIST A DRUG (manual entry point, separate from the FEFO alert
+    //    "Push to Marketplace" shortcut) ──
+    window.openListDrugModal = async () => {
+      const r = await fetch('/api/inventory', { credentials: 'include' });
+      const data = await r.json();
+      const drugs = data.drugs || [];
+      const modal = document.createElement('div');
+      modal.className = 'modal-backdrop';
+      modal.style.display = 'flex';
+      modal.innerHTML = '\x3cdiv class="modal-box"\x3e' +
+        '\x3cdiv class="modal-header"\x3e\x3ch3\x3eList a Drug\x3c/h3\x3e\x3cbutton class="modal-close" onclick="this.closest(\'.modal-backdrop\').remove()"\x3e\u2715\x3c/button\x3e\x3c/div\x3e' +
+        '\x3cdiv class="form-group"\x3e\x3clabel\x3eDrug\x3c/label\x3e\x3cselect class="form-control" id="list-drug-id"\x3e' +
+          drugs.map(d => '\x3coption value="' + d._id + '"\x3e' + d.drug_name + ' (' + d.total_quantity + ' in stock)\x3c/option\x3e').join('') +
+        '\x3c/select\x3e\x3c/div\x3e' +
+        '\x3cdiv class="form-group"\x3e\x3clabel\x3eQuantity to list\x3c/label\x3e\x3cinput type="number" class="form-control" id="list-qty" min="1" /\x3e\x3c/div\x3e' +
+        '\x3cdiv class="form-group"\x3e\x3clabel\x3eUnit Price (optional, 0 for free offload)\x3c/label\x3e\x3cinput type="number" class="form-control" id="list-price" min="0" value="0" /\x3e\x3c/div\x3e' +
+        '\x3cdiv id="list-result"\x3e\x3c/div\x3e' +
+        '\x3cdiv class="modal-footer"\x3e\x3cbutton class="btn btn-ghost" onclick="this.closest(\'.modal-backdrop\').remove()"\x3eCancel\x3c/button\x3e\x3cbutton class="btn btn-primary" onclick="submitListing(this)"\x3eList It\x3c/button\x3e\x3c/div\x3e' +
+      '\x3c/div\x3e';
+      document.body.appendChild(modal);
+    };
+
+    window.submitListing = async (btn) => {
+      const drugId = document.getElementById('list-drug-id').value;
+      const quantity = Number(document.getElementById('list-qty').value);
+      const unit_price = Number(document.getElementById('list-price').value) || 0;
+      const resultDiv = document.getElementById('list-result');
+      if (!quantity || quantity <= 0) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3eEnter a valid quantity\x3c/div\x3e';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Listing...';
+      try {
+        const res = await fetch('/api/marketplace', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ drugId, quantity, unit_price }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-success"\x3eListed successfully\x3c/div\x3e';
+        setTimeout(() => { document.querySelector('.modal-backdrop')?.remove(); loadMyListings(); }, 1000);
+      } catch (err) {
+        resultDiv.innerHTML = '\x3cdiv class="flash flash-error"\x3e' + err.message + '\x3c/div\x3e';
+        btn.disabled = false;
+        btn.textContent = 'List It';
+      }
+    };
+
+    loadListings();
+    setInterval(loadListings, 30000);
