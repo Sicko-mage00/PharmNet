@@ -21,7 +21,7 @@ const facilityController = {
             tier,
             ownership,
         });
-
+        console.log("✅ Database save successful!");
         res.status(201).json({
             status: 'success',
             message: 'Facility created successfully',
