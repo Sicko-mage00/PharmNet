@@ -21,7 +21,6 @@ const facilityController = {
             tier,
             ownership,
         });
-        console.log("✅ Database save successful!");
         res.status(201).json({
             status: 'success',
             message: 'Facility created successfully',
@@ -29,6 +28,8 @@ const facilityController = {
         });
 
     } catch (err) {
+      console.error("🔥 THE GHOST BUG:", err); // <--- ADD THIS EXACT LINE
+      
       if (err.code === 11000) {
         return res.status(409).json({ message: 'Facility with this name already exists' });
       }
